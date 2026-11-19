@@ -74,8 +74,12 @@ export function AppDetailView({ slug } = {}) {
 
   container.appendChild(renderDetailSkeleton());
 
-  fetchAppDetail(slug)
+  const controller = new AbortController();
+  container.cleanup = () => controller.abort();
+
+  fetchAppDetail(slug, { signal: controller.signal })
     .then((data) => {
+      if (controller.signal.aborted || !container.isConnected) return;
       container.innerHTML = "";
       if (data?.app?.name) {
         document.title = `${data.app.name} — Vib Apps`;
@@ -83,6 +87,9 @@ export function AppDetailView({ slug } = {}) {
       renderDetail(container, data.app, data.docs || {});
     })
     .catch((err) => {
+      if (err?.name === "AbortError" || controller.signal.aborted || !container.isConnected) {
+        return;
+      }
       container.innerHTML = "";
       renderError(container, err.message);
     });
@@ -311,52 +318,6 @@ function renderDetail(container, app, docs) {
   selectField.appendChild(versionSelect);
   installCard.appendChild(selectField);
 
-  // Conditional OS / Platform selector (ONLY when app metadata provides real platforms)
-  if (Array.isArray(app.platforms) && app.platforms.length > 0) {
-    const platField = document.createElement("div");
-    platField.className = "app-detail__field";
-    const platLabel = document.createElement("label");
-    platLabel.className = "app-detail__field-label";
-    platLabel.htmlFor = "app-platform-select";
-    platLabel.textContent = "Operating System";
-    platField.appendChild(platLabel);
-
-    const platSelect = document.createElement("select");
-    platSelect.id = "app-platform-select";
-    platSelect.className = "app-detail__select";
-    app.platforms.forEach((plat) => {
-      const opt = document.createElement("option");
-      opt.value = String(plat);
-      opt.textContent = String(plat);
-      platSelect.appendChild(opt);
-    });
-    platField.appendChild(platSelect);
-    installCard.appendChild(platField);
-  }
-
-  // Conditional Architecture selector (ONLY when app metadata provides real architectures)
-  if (Array.isArray(app.architectures) && app.architectures.length > 0) {
-    const archField = document.createElement("div");
-    archField.className = "app-detail__field";
-    const archLabel = document.createElement("label");
-    archLabel.className = "app-detail__field-label";
-    archLabel.htmlFor = "app-arch-select";
-    archLabel.textContent = "Architecture";
-    archField.appendChild(archLabel);
-
-    const archSelect = document.createElement("select");
-    archSelect.id = "app-arch-select";
-    archSelect.className = "app-detail__select";
-    app.architectures.forEach((arch) => {
-      const opt = document.createElement("option");
-      opt.value = String(arch);
-      opt.textContent = String(arch);
-      archSelect.appendChild(opt);
-    });
-    archField.appendChild(archSelect);
-    installCard.appendChild(archField);
-  }
-
   // Primary Direct Binary Download Link (semantic <a>, no window.open)
   const dlLinkLabel = document.createElement("span");
   const dlLink = Button({
@@ -442,6 +403,23 @@ function renderDetail(container, app, docs) {
   const dateMeta = createMetaRow("Released", "calendar");
   const formatMeta = createMetaRow("Package", "package");
   const sizeMeta = createMetaRow("File Size", "file");
+
+  // Conditional read-only Platforms & Architecture specification rows (truthful metadata display)
+  if (Array.isArray(app.platforms) && app.platforms.length > 0) {
+    const platforms = app.platforms.map((p) => String(p).trim()).filter(Boolean);
+    if (platforms.length > 0) {
+      const platformMeta = createMetaRow("Platforms", "monitor");
+      platformMeta.dd.textContent = platforms.join(" · ");
+    }
+  }
+
+  if (Array.isArray(app.architectures) && app.architectures.length > 0) {
+    const architectures = app.architectures.map((a) => String(a).trim()).filter(Boolean);
+    if (architectures.length > 0) {
+      const archMeta = createMetaRow("Architecture", "cpu");
+      archMeta.dd.textContent = architectures.join(" · ");
+    }
+  }
 
   // Checksum Row (with Show Full toggle + Copy button)
   const hashRow = document.createElement("div");

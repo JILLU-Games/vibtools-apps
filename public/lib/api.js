@@ -41,17 +41,25 @@ export async function fetchAppsCatalog(forceRefresh = false) {
  * Fetches details and documentation for a specific app.
  *
  * @param {string} slug
+ * @param {Object} [options]
+ * @param {AbortSignal} [options.signal]
  * @returns {Promise<{ app: Object, docs: { features?: string, changelog?: string } }>}
  */
-export async function fetchAppDetail(slug) {
+export async function fetchAppDetail(slug, { signal } = {}) {
   if (!slug || typeof slug !== "string") {
     throw new Error("A valid app slug must be specified.");
   }
 
   let res;
   try {
-    res = await fetch(`/api/apps?slug=${encodeURIComponent(slug.trim())}`);
+    res = await fetch(
+      `/api/apps?slug=${encodeURIComponent(slug.trim())}`,
+      signal ? { signal } : undefined
+    );
   } catch (netErr) {
+    if (netErr?.name === "AbortError") {
+      throw netErr;
+    }
     throw new Error(`Network failure requesting app '${slug}': ${netErr.message || "Failed to fetch"}`);
   }
 

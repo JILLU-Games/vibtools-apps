@@ -172,6 +172,70 @@ export async function fetchRepoFile(repo, branch, filePath, env, ctx, { ttl = 30
 }
 
 /**
+ * Validates a parsed app.config.json object against required schema invariants.
+ *
+ * @param {any} config
+ * @returns {{ ok: boolean, status?: number, error?: string }}
+ */
+export function validateAppConfig(config) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    return { ok: false, status: 422, error: "app.config.json root must be a plain object" };
+  }
+
+  const required = ["slug", "name", "latest", "versions"];
+  const missing = required.filter((field) => !config[field]);
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      status: 422,
+      error: `Missing required fields in app.config.json: ${missing.join(", ")}`
+    };
+  }
+
+  if (
+    typeof config.slug !== "string" ||
+    !config.slug.trim() ||
+    typeof config.name !== "string" ||
+    !config.name.trim() ||
+    typeof config.latest !== "string" ||
+    !config.latest.trim()
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      error: "Fields slug, name, and latest in app.config.json must be non-empty strings"
+    };
+  }
+
+  if (
+    !config.versions ||
+    typeof config.versions !== "object" ||
+    Array.isArray(config.versions) ||
+    Object.keys(config.versions).length === 0
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      error: "Field versions in app.config.json must be a non-empty object map"
+    };
+  }
+
+  const latestNorm = config.latest.trim().toLowerCase().replace(/^v/, "");
+  const hasLatestEntry = Object.keys(config.versions).some(
+    (k) => k.toLowerCase().replace(/^v/, "") === latestNorm
+  );
+  if (!hasLatestEntry) {
+    return {
+      ok: false,
+      status: 422,
+      error: `Latest version '${config.latest}' not found in app.config.json versions map`
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
  * Fetches and validates the .vibtools/apps/app.config.json file for an app entry.
  *
  * @param {Object} entry - Entry from registry.json
@@ -221,19 +285,9 @@ export async function fetchAppConfig(entry, env, ctx) {
     };
   }
 
-  if (!config || typeof config !== "object") {
-    return { ok: false, status: 422, error: "app.config.json root must be an object" };
-  }
-
-  // Validate minimum required fields per schema
-  const required = ["slug", "name", "latest", "versions"];
-  const missing = required.filter((field) => !config[field]);
-  if (missing.length > 0) {
-    return {
-      ok: false,
-      status: 422,
-      error: `Missing required fields in app.config.json: ${missing.join(", ")}`
-    };
+  const validation = validateAppConfig(config);
+  if (!validation.ok) {
+    return validation;
   }
 
   return {

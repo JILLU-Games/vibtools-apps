@@ -1,135 +1,141 @@
-# Phase Execution Tracker & Completion Ledger
+# Phase Execution Tracker & Completion Ledger (Cycle 2 — Baseline v2.0)
 
 > **Document Location:** `notes/phases/phase_tracker.md`  
-> **Master Scope:** Incremental Phase-by-Phase Execution Tracker  
-> **Rule:** Update this document immediately upon the start and completion of each phase.
+> **Baseline Reference:** [`notes/planning/baseline_freeze.md`](../planning/baseline_freeze.md) (`v2.0`, 2026-11-19)  
+> **Master Spec:** [`notes/planning/phase_implementation_specs.md`](../planning/phase_implementation_specs.md)  
+> **Rule:** Update this tracker immediately when starting and immediately after verifying each phase. Never begin Phase `N+1` until Phase `N` passes all exit gates and is logged here.
 
 ---
 
-## 1. Overall Progress Dashboard
+## 1. Overall Cycle 2 Progress Dashboard
 
-| Total Planned Phases | Completed Phases | Active Phase | Remaining Phases | Current Overall Status |
-| :---: | :---: | :---: | :---: | :---: |
-| **4** | **4** | **None (All Complete)** | **0** | **All 4 Phases Complete & Production Ready (4/4)** |
-
----
-
-## 2. Phase Execution Status Ledger
-
-| Phase | Title / Focus | Status | Scope Lock Files | Bugs Addressed |
-| :--- | :--- | :---: | :--- | :---: |
-| **Phase 1** | Mock/Demo Fallback Engine | **Completed** | `functions/_lib/mockData.js`, `functions/api/apps.js`, `functions/[[path]].js` | Issue 1 |
-| **Phase 2** | Edge Routing, CORS & CLI Normalization | **Completed** | `functions/[[path]].js`, `functions/api/apps.js`, `functions/_lib/github.js` | Issues 8, 9, 10, 12 |
-| **Phase 3** | Frontend UI Parity & Mobile Experience | **Completed** | `public/components/sections/*`, `public/components/layout/*`, `public/app.js`, `public/styles/globals.css` | Issues 2, 3, 5, 6, 7 |
-| **Phase 4** | Caching Scalability, Dynamic Titles & PWA Polish | **Completed** | `functions/api/apps.js`, `public/app.js`, `public/manifest.json`, `public/icons/*` | Issues 4, 11, PWA Icon |
+| Total Planned Phases | Completed Phases | Active / Next Phase | Remaining Phases | Bugs Fixed / Total | Overall Status |
+| :---: | :---: | :---: | :---: | :---: | :---: |
+| **4** | **4** | **None — All Phases Complete** | **0** | **18 / 18** | **Cycle 2 Complete & Production-Hardened (4/4)** |
 
 ---
 
-## 3. Completed Phases (Log History)
+## 2. Phase Execution Status Ledger (Cycle 2)
 
-### Phase 1: Mock/Demo Fallback Engine (Completed 2026-11-19)
-- **Delivered Files:**
-  - `functions/_lib/mockData.js` (Created schema-compliant mock catalog engine with 3 sample apps: `CalGrid`, `DevPrompt`, `VibClip`).
-  - `functions/api/apps.js` (Integrated automatic fallback for Mode A catalog and Mode B app details/docs when GitHub repos are unconfigured, rate-limited, or offline).
-  - `functions/[[path]].js` (Integrated mock installer script streaming and direct download 302 redirects for sample apps on `get.vib.tools`).
-- **Scope Compliance:** 100% compliant. Zero frontend, UI, styling, or documentation files were touched.
-- **Verification:** 7/7 automated dev server endpoint tests passed (catalog aggregation, single app details, PowerShell installer, 302 redirects, 404 and 400 guards).
-
-### Phase 2: Edge Routing, CORS & CLI Normalization (Completed 2026-11-19)
-- **Delivered Files:**
-  - `functions/_lib/github.js`: Aligned synthetic cache key URL to zone-affine format `https://apps.vib.tools/__cache/gh/...` to prevent Cloudflare edge cache partitioning errors.
-  - `functions/api/apps.js`: Added CORS headers (`Access-Control-Allow-Origin: *`, `Methods`, `Headers`) to all responses and exported `onRequestOptions()` returning `204 No Content` for preflight requests.
-  - `functions/[[path]].js`: Added `resolveVersion()` supporting both `"v1.0.3"` and `"1.0.3"`; added browser HTML redirect (`Accept: text/html`) redirecting `/` to `apps.vib.tools`, `/cli` to `apps.vib.tools/cli`, and `/<slug>` to `apps.vib.tools/app/<slug>` while preserving raw PowerShell CLI installations.
-- **Scope Compliance:** 100% compliant. Exactly 3 files modified in `functions/`. Zero frontend files touched.
-- **Verification:** 8/8 automated endpoint tests passed in dev server (`test-phase2.mjs`).
-
-### Phase 3: Frontend UI Parity & Mobile Experience (Completed 2026-11-19)
-- **Delivered Files:**
-  - `public/components/sections/AppGrid.js`: Rendered app icon on each catalog card with lazy-loading and vector SVG fallback (`.app-card__icon`); added responsive horizontal category filter chip bar (`.app-category-bar`) with active category synchronization.
-  - `public/components/sections/AppDetailView.js`: Added app icon with lazy-loading and vector SVG fallback in detail header row (`.app-detail__header-row` & `.app-detail__icon`).
-  - `public/components/layout/Header.js`: Guarded global `/` keyboard search shortcut to prevent stealing focus when a modal (`.ui-modal`, `.ui-modal-backdrop`) is currently open.
-  - `public/components/layout/Sidebar.js`: Hardened category link selection with `CSS.escape()` preventing selector syntax errors.
-  - `public/app.js`: Added 150ms search debouncing (`searchDebounceTimer`) and history state preservation (`replaceState`) to eliminate typing lag and browser back button flooding.
-  - `public/styles/globals.css`: Added zero-shadow, token-compliant classes for `.app-card__icon`, `.app-category-bar`, `.app-category-chip`, `.app-detail__header-row`, and `.app-detail__icon`.
-- **Scope Compliance:** 100% compliant. Exactly modified frontend section/layout/CSS files within Scope Lock. Zero files modified in `functions/`, `docs/`, or `registry.json`.
-- **Verification:** 15/15 static code compliance tests passed and 16/16 dev server HTTP tests passed.
-
-### Phase 4: Caching Scalability, Dynamic Titles & PWA Polish (Completed 2026-11-19)
-- **Delivered Files:**
-  - `functions/api/apps.js`: Integrated Cloudflare `caches.default` edge cache for Mode A catalog list (`GET /api/apps`) with a 300-second TTL and `X-Cache-Status` instrumentation, preventing redundant GitHub API fan-outs.
-  - `public/app.js`: Implemented `updateDocumentTitle(route)` setting contextual page titles on route changes (`App Name — Vib Apps`, `Category — Vib Apps`, `CLI Guide — Vib Apps`, or default).
-  - `public/manifest.json`: Swapped data URI icon for standard web path `/icons/icon.svg`.
-  - `public/icons/icon.svg`: Created developer-grade vector SVG matching Vib Tools brand colors (`#0d1117` canvas with `#1d6cf6` layers icon).
-- **Scope Compliance:** 100% compliant. Exactly 4 files within Scope Lock.
-- **Verification:** 8/8 static tests passed and 14/14 HTTP dev server endpoint tests passed.
+| Phase | Title / Focus | Status | Exact Scope Lock Files | Bugs Targeted | Test Gate |
+| :---: | :--- | :---: | :--- | :---: | :---: |
+| **Phase 1** | Production Data, Security & Crash Hardening | **Completed (2026-11-19)** | `functions/api/apps.js`, `functions/[[path]].js`, `functions/_lib/mockData.js`, `server.js`, `.env.example` | `BUG-01`, `BUG-02`, `BUG-03`, `BUG-04`, `BUG-05` (5) | **PASS** (12/12 tests + 26/26 probes) |
+| **Phase 2** | Backend Edge Engine, Caching & Routing Parity | **Completed (2026-11-19)** | `functions/api/apps.js`, `functions/[[path]].js`, `functions/_lib/github.js`, `server.js` | `BUG-06`, `BUG-07`, `BUG-08`, `BUG-09`, `BUG-10`, `BUG-11` (6) | **PASS** (12/12 tests + 27/27 probes) |
+| **Phase 3** | Frontend Real Functionality, SPA State & Public Asset Hygiene | **Completed (2026-11-19)** | `public/components/sections/AppDetailView.js`, `public/lib/api.js`, `public/lib/router.js`, `public/lib/appMeta.js`, `public/app.js`, deleted `public/assets/aistudio/`, `public/vib.tools.Branding/site.webmanifest`, `public/styles.css` | `BUG-12`, `BUG-13`, `BUG-14`, `BUG-15`, `BUG-16` (5) | **PASS** (12/12 tests + 25/25 browser checks) |
+| **Phase 4** | PWA Polish & Full Automated Regression Test Suite | **Completed (2026-11-19)** | `public/sw.js`, `package.json`, `server.test.js`, `public/lib/appMeta.test.js` | `BUG-17`, `BUG-18` (2) | **PASS** (`npm test`: 29/29 tests) |
 
 ---
 
-## 4. Remaining Phases & Upcoming Deliverables
+## 3. Completed Phases Log (Cycle 2)
 
-### Phase 1: Mock/Demo Fallback Engine
-- **Target Files:**
-  - `functions/_lib/mockData.js` (Create)
-  - `functions/api/apps.js` (Integrate fallback)
-  - `functions/[[path]].js` (Integrate fallback)
-- **Features / Fixes to Add:**
-  - Complete schema-compliant sample applications (`CalGrid`, `DevPrompt`, `VibClip`).
-  - Seamless fallback activation in `/api/apps` when GitHub API returns 0 apps or lacks tokens.
-  - Seamless installer script and download resolution on `get.vib.tools` for sample apps.
-- **Unchanged / Protected Areas:** All `public/` frontend UI files, styling, tokens, and docs.
-
-### Phase 2: Edge Routing, CORS & CLI Normalization
-- **Target Files:**
+### Phase 1: Production Data, Security & Crash Hardening (Completed 2026-11-19)
+- **Execution Log:** [`notes/logs/cycle2-phase-1.md`](../logs/cycle2-phase-1.md)
+- **Bugs Closed (5):** `BUG-01`, `BUG-02`, `BUG-03`, `BUG-04`, `BUG-05`
+- **Files Modified (100% Within Scope Lock):**
+  - `functions/_lib/mockData.js`
+  - `functions/api/apps.js`
   - `functions/[[path]].js`
+  - `server.js`
+  - `.env.example`
+- **Features / Hardening Added:**
+  - Env-gated `isMockFallbackEnabled(request, env)` (local/preview default ON, live custom domains default OFF unless `ENABLE_MOCK_FALLBACK=true`), zero mock/empty cache poisoning (`caches.default` caches live non-empty catalogs only), `X-Catalog-Source` header, `Cache-Control: no-store` on mock/error responses.
+  - Sanitized `$APP_NAME` injected in PowerShell script header + complete `Invoke-WebRequest` / `Get-FileHash` SHA256 flow in all 3 demo installers.
+  - Safe `try/catch` `decodeURIComponent()` in `functions/[[path]].js` and `server.js` returning `400 Bad Request` on malformed URLs.
+  - Strict `isTrustedDownloadUrl()` allowlist (`dl.vib.tools`, GitHub release hosts, + `ALLOWED_DOWNLOAD_HOSTS`) returning `403 Forbidden` on untrusted targets.
+  - `isValidSlug()` enforced across all `get.vib.tools` routes + `Object.hasOwn()` hardening in `resolveVersion()`.
+- **Unchanged / Protected Surface Verified:** Zero files touched in `public/`, `functions/_lib/github.js`, `registry.json`, `package.json`, or `wrangler.toml`.
+- **Verification Results:** `npm run build` PASS, `npm run lint` PASS, `node --test server.test.js public/lib/appMeta.test.js` **12/12 PASS**, Phase 1 edge probes **26/26 PASS**.
+- **Remaining Phases:** **3** (`Phase 2`, `Phase 3`, `Phase 4`) — Next up: **Phase 2**.
+
+### Phase 2: Backend Edge Engine, Caching & Routing Parity (Completed 2026-11-19)
+- **Execution Log:** [`notes/logs/cycle2-phase-2.md`](../logs/cycle2-phase-2.md)
+- **Bugs Closed (6):** `BUG-06`, `BUG-07`, `BUG-08`, `BUG-09`, `BUG-10`, `BUG-11`
+- **Files Modified (100% Within Scope Lock):**
   - `functions/api/apps.js`
+  - `functions/[[path]].js`
   - `functions/_lib/github.js`
-- **Features / Fixes to Add:**
-  - Version prefix normalization (`v1.0.3` <-> `1.0.3`).
-  - Browser HTML navigation redirect on `get.vib.tools/<slug>` to `apps.vib.tools/app/<slug>`.
-  - CORS headers (`Access-Control-Allow-Origin: *`) on `/api/apps`.
-  - Synthetic cache key origin normalization in `github.js`.
-- **Unchanged / Protected Areas:** All `public/` files and mock data.
+  - `server.js`
+- **Features / Hardening Added:**
+  - Mode B (`GET /api/apps?slug=<slug>`) live-only `caches.default` caching (`300s` TTL) + `X-Cache-Status: HIT | MISS | BYPASS`.
+  - Single clean `Content-Type: text/html; charset=utf-8` on SPA fallback via `new Headers(indexRes.headers)`.
+  - Versioned `get.vib.tools/<slug>/<version>` browser HTML `302` redirect to `https://apps.vib.tools/app/<slug>` (preserving CLI & `/dl/`).
+  - `/api/apps` host isolation rejecting `get.vib.tools` with `404 Not Found`.
+  - Dot-safe SPA reload routing (`/category/Node.js`, `/category/.NET`, `/app/my.app` → `200 OK`) while real missing static assets stay `404`.
+  - Exported `validateAppConfig()` deep schema validator (`422`) and `405 Method Not Allowed` (`Allow: GET, HEAD`) parity in `server.js`.
+- **Unchanged / Protected Surface Verified:** Zero files touched in `public/`, `functions/_lib/mockData.js`, `registry.json`, `package.json`, `wrangler.toml`, or `.env.example`.
+- **Verification Results:** `npm run build` PASS, `npm run lint` PASS, `node --test server.test.js public/lib/appMeta.test.js` **12/12 PASS**, Phase 2 edge probes **27/27 PASS**.
+- **Remaining Phases:** **2** (`Phase 3`, `Phase 4`) — Next up: **Phase 3**.
 
-### Phase 3: Frontend UI Parity & Mobile Experience
-- **Target Files:**
-  - `public/components/sections/AppGrid.js`
-  - `public/components/sections/AppDetailView.js`
-  - `public/components/layout/MobileNav.js`
-  - `public/components/layout/Sidebar.js`
-  - `public/components/layout/Header.js`
-  - `public/app.js`
-  - `public/styles/globals.css`
-- **Features / Fixes to Add:**
-  - `app.icon` rendering on cards and detail header.
-  - Mobile category browsing selector.
-  - Search input debouncing and history state pollution elimination.
-  - `CSS.escape()` protection on category selection.
-  - Modal focus stealing prevention for `/` shortcut.
-- **Unchanged / Protected Areas:** All `functions/` edge logic and backend engines.
+### Phase 3: Frontend Real Functionality, SPA State & Public Asset Hygiene (Completed 2026-11-19)
+- **Execution Log:** [`notes/logs/cycle2-phase-3.md`](../logs/cycle2-phase-3.md)
+- **Bugs Closed (5):** `BUG-12`, `BUG-13`, `BUG-14`, `BUG-15`, `BUG-16`
+- **Files Modified / Removed (100% Within Scope Lock):**
+  - Modified: `public/components/sections/AppDetailView.js`, `public/lib/api.js`, `public/lib/router.js`, `public/lib/appMeta.js`, `public/app.js`
+  - Deleted: `public/assets/aistudio/` (+ empty `public/assets/`), `public/vib.tools.Branding/site.webmanifest`, `public/styles.css` (retained `public/components/ui/Modal.js`)
+- **Features / Fixes Added:**
+  - Replaced non-functional OS/Architecture `<select>` controls with honest read-only `<dl>` metadata specification rows (`Platforms` & `Architecture`) rendered conditionally from real metadata.
+  - Cleaned 20 exposed non-runtime reference files, `"MyWebSite"` placeholder manifest, and unused `styles.css` from `public/`.
+  - Fixed `navigate()` full `pathname + search` comparison (Logo / `All Apps` reset from `/?q=...`) and restored `?q=` in `onRouteChange` on Browser Back/Forward (`popstate`) while cancelling pending debounce timers.
+  - Added `AbortController` + `container.isConnected` guard to `AppDetailView.js` and `{ signal }` + `AbortError` passthrough to `fetchAppDetail()`.
+  - Made `buildDownloadUrl()` environment-aware (`localhost`/`127.0.0.1` routes to local `?mode=get`, production/default stays `https://get.vib.tools/dl/...`).
+- **Unchanged / Protected Surface Verified:** Zero files touched in `functions/`, `server.js`, `registry.json`, `wrangler.toml`, `package.json`, `public/sw.js`, `public/styles/tokens.css`, `public/components/layout/*`, or `public/components/ui/*`.
+- **Verification Results:** `npm run build` PASS, `npm run lint` PASS, `node --test server.test.js public/lib/appMeta.test.js` **12/12 PASS**, Playwright Chromium desktop browser verification **25/25 PASS** (visual screenshot audit: 0 high-severity defects).
+- **Remaining Phases:** **1** (`Phase 4`) — Next up: **Phase 4**.
 
-### Phase 4: Caching Scalability, Dynamic Titles & PWA Polish
-- **Target Files:**
-  - `functions/api/apps.js`
-  - `public/app.js`
-  - `public/manifest.json`
-  - `public/icons/icon.svg`
-- **Features / Fixes to Add:**
-  - Worker-level edge caching for `/api/apps`.
-  - Dynamic `document.title` on route changes.
-  - Static PWA SVG icon file.
-- **Unchanged / Protected Areas:** UI layouts, core router logic, and existing edge handlers.
+### Phase 4: PWA Polish & Full Automated Regression Test Suite (Completed 2026-11-19)
+- **Execution Log:** [`notes/logs/cycle2-phase-4.md`](../logs/cycle2-phase-4.md)
+- **Bugs Closed (2):** `BUG-17`, `BUG-18`
+- **Files Modified (100% Within Scope Lock):**
+  - `public/sw.js`
+  - `package.json`
+  - `server.test.js`
+  - `public/lib/appMeta.test.js`
+- **Features / Hardening Added:**
+  - Bumped PWA Service Worker cache to `vib-apps-hub-v3`, synced precache array with all `manifest.json` icons (`web-app-manifest-192x192.png`, `web-app-manifest-512x512.png`, `/icons/icon.svg`), and added early non-`GET`/non-HTTP fetch guards.
+  - Updated `npm test` to run both `server.test.js` and `public/lib/appMeta.test.js` and added full 18-bug automated regression test coverage (`29/29 PASS`).
+- **Unchanged / Protected Surface Verified:** Zero runtime application logic or UI files touched in `functions/`, `server.js`, `public/components/`, `public/styles/`, `public/app.js`, `registry.json`, or `wrangler.toml`.
+- **Verification Results:** `npm run build` PASS, `npm run lint` PASS, `npm test` **29/29 PASS**, `node --check public/sw.js` PASS, dev server restarted cleanly.
+- **Remaining Phases:** **0** — **Cycle 2 Production Hardening 100% Complete (`18 / 18` Bugs Closed).**
 
 ---
 
-## 5. Scope Lock Protection Protocol
+## 4. Remaining Phases & Operational Deployment Readiness
 
-1. **Before Starting Any Phase:**
-   - Verify the exact files permitted under the active phase's Scope Lock.
-   - Do NOT touch or refactor any file outside the permitted list.
-2. **During Implementation:**
-   - Execute only the targeted fixes specified in `notes/planning/phase_implementation_specs.md`.
-   - Never perform speculative refactoring, styling tweaks, or structural changes outside the phase.
-3. **After Completing Any Phase:**
-   - Run verification tests specific to that phase.
-   - Record completion timestamp, updated files, and verified features in this tracker.
-   - Move to the next phase sequentially.
+- **Code Hardening Phases Remaining:** **0 / 4** (All 18 verified forensic audit findings are resolved and protected by automated regression tests).
+- **Operational Pre-Launch Steps (Cloudflare Pages):**
+  1. Populate `registry.json` with live published Vib Tools repositories.
+  2. Configure `GITHUB_TOKEN` (encrypted secret) in Cloudflare Pages Production environment.
+  3. Bind custom domains `apps.vib.tools` and `get.vib.tools` to the deployed Cloudflare Pages project.
+
+---
+
+## 5. Strict Scope Lock Protection Protocol
+
+To keep every phase clean, predictable, and regression-free:
+
+1. **Pre-Flight Check (Before Editing):**
+   - Confirm active phase number in Section 1 & Section 2.
+   - Cross-check exact target file list against `notes/planning/phase_implementation_specs.md`.
+   - Do **NOT** touch, reformat, or refactor any file outside the active phase's Allowed Files list.
+2. **During Phase Execution:**
+   - Implement **ONLY** the exact bug IDs assigned to the active phase.
+   - Preserve all 9 Baseline Frozen Invariants (`notes/planning/baseline_freeze.md` Section 3): zero-build, zero inline styles, zero `box-shadow`, `"Segoe UI"` typography, DOMPurify XSS protection, `GITHUB_TOKEN` isolation, dual-theme parity, reload-safe SPA routing, and accurate Toast feedback.
+3. **Post-Phase Verification & Logging:**
+   - Run `npm run build`, `npm run lint`, and `npm test` (plus targeted live edge probes / browser verification for UI phases).
+   - Verify changed file list matches Scope Lock 100%.
+   - Update:
+     1. This file (`notes/phases/phase_tracker.md`) — increment Completed Phases, append detailed log entry, advance Active Phase.
+     2. `notes/planning/feature_readiness_ledger.md` — promote newly verified features.
+     3. `notes/planning/error_handling_matrix.md` — mark hardened error scenarios as active.
+     4. `notes/logs/` — record timestamped phase execution log and sync `notes/MANIFEST.md` & `notes/MINIFEST.md`.
+     5. `MEMORY.md` — sync current milestone status.
+
+---
+
+## 6. Historical Archive — Cycle 1 (Completed 2026-11-19)
+
+Cycle 1 addressed the initial 12 pre-deployment findings (`notes/forensic_production_readiness_audit.md`) and completed 4/4 phases (68/68 tests passed):
+- **Cycle 1 Phase 1:** Mock/Demo Fallback Engine (`notes/logs/phase-1-mock-engine.md`) — Completed.
+- **Cycle 1 Phase 2:** Edge Routing, CORS & CLI Normalization (`notes/logs/phase-2-edge-routing.md`) — Completed.
+- **Cycle 1 Phase 3:** Frontend UI Parity & Mobile Experience (`notes/logs/phase-3-frontend-ui.md`) — Completed.
+- **Cycle 1 Phase 4:** Caching Scalability, Dynamic Titles & PWA Polish (`notes/logs/phase-4-caching-pwa.md`) — Completed.

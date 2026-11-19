@@ -132,13 +132,23 @@ export function buildInstallCommand(slug, version, latest) {
 
 /**
  * Builds the exact edge direct download endpoint URL for a binary version.
+ * Uses the local edge emulator (`?mode=get`) on localhost/127.0.0.1 and
+ * defaults to `https://get.vib.tools/dl/...` in production and non-browser environments.
  *
  * @param {string} slug
  * @param {string} version
+ * @param {Object} [options]
+ * @param {Location|{ hostname?: string, origin?: string }} [options.location]
  * @returns {string}
  */
-export function buildDownloadUrl(slug, version) {
-  return `https://get.vib.tools/dl/${encodeURIComponent(slug)}/${encodeURIComponent(version)}`;
+export function buildDownloadUrl(slug, version, options = {}) {
+  const encodedPath = `/dl/${encodeURIComponent(slug)}/${encodeURIComponent(version)}`;
+  const runtimeLoc = options.location || (typeof window !== "undefined" ? window.location : null);
+  const host = runtimeLoc?.hostname?.toLowerCase() || "";
+  if (host === "localhost" || host === "127.0.0.1") {
+    return `${runtimeLoc.origin}${encodedPath}?mode=get`;
+  }
+  return `https://get.vib.tools${encodedPath}`;
 }
 
 /**

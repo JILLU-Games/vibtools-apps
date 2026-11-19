@@ -1,12 +1,54 @@
 import {
+  isValidSlug,
   findAppEntry,
   fetchAppConfig,
   fetchAppInstaller
 } from "./_lib/github.js";
 import {
   findMockApp,
-  getMockInstaller
+  getMockInstaller,
+  isMockFallbackEnabled
 } from "./_lib/mockData.js";
+
+const DEFAULT_TRUSTED_DOWNLOAD_HOSTS = [
+  "dl.vib.tools",
+  "github.com",
+  "objects.githubusercontent.com",
+  "release-assets.githubusercontent.com"
+];
+
+const STATIC_ASSET_EXT_RE =
+  /\.(css|js|mjs|cjs|json|webmanifest|svg|png|jpe?g|gif|webp|ico|txt|xml|pdf|woff2?|ttf|eot|map|wasm)$/i;
+
+/**
+ * Validates that a download target URL is a syntactically valid HTTPS URL
+ * pointing strictly to an allowlisted binary storage host (prevents open redirects).
+ *
+ * @param {string} rawUrl
+ * @param {Object} [env]
+ * @returns {boolean}
+ */
+export function isTrustedDownloadUrl(rawUrl, env) {
+  if (typeof rawUrl !== "string" || !rawUrl.trim()) return false;
+
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch (_) {
+    return false;
+  }
+
+  if (parsed.protocol !== "https:") return false;
+  if (parsed.username || parsed.password) return false;
+
+  const extraHosts = String(env?.ALLOWED_DOWNLOAD_HOSTS ?? "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+
+  const allowedHosts = new Set([...DEFAULT_TRUSTED_DOWNLOAD_HOSTS, ...extraHosts]);
+  return allowedHosts.has(parsed.hostname.toLowerCase());
+}
 
 /**
  * Resolves a version object from config.versions supporting both 'v'-prefixed
@@ -23,19 +65,19 @@ function resolveVersion(versions, requestedVersion, latestKey) {
   if (!target) return null;
 
   // 1. Direct match
-  if (versions[target]) {
+  if (Object.hasOwn(versions, target)) {
     return { versionKey: target, versionData: versions[target] };
   }
 
   // 2. Try adding 'v' prefix
   const withV = `v${target.replace(/^v/i, "")}`;
-  if (versions[withV]) {
+  if (Object.hasOwn(versions, withV)) {
     return { versionKey: withV, versionData: versions[withV] };
   }
 
   // 3. Try removing 'v' prefix
   const withoutV = target.replace(/^v/i, "");
-  if (versions[withoutV]) {
+  if (Object.hasOwn(versions, withoutV)) {
     return { versionKey: withoutV, versionData: versions[withoutV] };
   }
 
@@ -79,18 +121,21 @@ export async function onRequestGet(context) {
     if (res.status === 404) {
       const pathname = url.pathname;
       const isApi = pathname === "/api" || pathname.startsWith("/api/");
-      const hasExtension = /\.[a-zA-Z0-9]+$/.test(pathname);
+      const isKnownSpaRoute =
+        pathname === "/cli" ||
+        pathname.startsWith("/app/") ||
+        pathname.startsWith("/category/");
+      const isStaticAssetPath = !isKnownSpaRoute && STATIC_ASSET_EXT_RE.test(pathname);
 
-      if (!isApi && !hasExtension && env && env.ASSETS && typeof env.ASSETS.fetch === "function") {
+      if (!isApi && !isStaticAssetPath && env && env.ASSETS && typeof env.ASSETS.fetch === "function") {
         const indexUrl = new URL("/index.html", request.url);
         const indexRes = await env.ASSETS.fetch(indexUrl);
         if (indexRes && (indexRes.status === 200 || indexRes.ok)) {
+          const spaHeaders = new Headers(indexRes.headers);
+          spaHeaders.set("Content-Type", "text/html; charset=utf-8");
           return new Response(indexRes.body, {
             status: 200,
-            headers: {
-              ...Object.fromEntries(indexRes.headers.entries()),
-              "Content-Type": "text/html; charset=utf-8"
-            }
+            headers: spaHeaders
           });
         }
       }
@@ -99,9 +144,19 @@ export async function onRequestGet(context) {
     return res;
   }
 
-  // Parse path segments from pathname
+  // Parse path segments from pathname safely (prevent uncaught URIError 500)
   const cleanPath = url.pathname.replace(/^\/+|\/+$/g, "");
-  const segments = cleanPath ? cleanPath.split("/").map((s) => decodeURIComponent(s).trim()) : [];
+  let segments = [];
+  if (cleanPath) {
+    try {
+      segments = cleanPath.split("/").map((s) => decodeURIComponent(s).trim());
+    } catch (_) {
+      return new Response("Bad Request: Malformed URL encoding.\n", {
+        status: 400,
+        headers: { "Content-Type": "text/plain; charset=utf-8" }
+      });
+    }
+  }
 
   const accept = request.headers.get("accept") || "";
   const isHtml = accept.includes("text/html");
@@ -114,7 +169,13 @@ export async function onRequestGet(context) {
     if (segments[0] === "cli") {
       return Response.redirect("https://apps.vib.tools/cli", 302);
     }
-    if (segments.length === 1 && segments[0] !== "dl") {
+    if ((segments.length === 1 || segments.length === 2) && segments[0] !== "dl") {
+      if (!isValidSlug(segments[0])) {
+        return new Response("Invalid app slug format.\n", {
+          status: 400,
+          headers: { "Content-Type": "text/plain; charset=utf-8" }
+        });
+      }
       return Response.redirect(`https://apps.vib.tools/app/${encodeURIComponent(segments[0])}`, 302);
     }
   }
@@ -172,6 +233,14 @@ export async function onRequestGet(context) {
       });
     }
 
+    if (!isValidSlug(slug)) {
+      return new Response("Invalid app slug format. Usage: /dl/<slug>[/<version>]\n", {
+        status: 400,
+        headers: { "Content-Type": "text/plain; charset=utf-8" }
+      });
+    }
+
+    const allowMock = isMockFallbackEnabled(request, env);
     let config = null;
     const entry = findAppEntry(slug);
     if (entry) {
@@ -181,8 +250,8 @@ export async function onRequestGet(context) {
       }
     }
 
-    // Fallback to sample app if live repository is offline or unconfigured
-    if (!config) {
+    // Fallback to sample app ONLY when mock fallback is permitted
+    if (!config && allowMock) {
       const mockApp = findMockApp(slug);
       if (mockApp) {
         config = mockApp;
@@ -210,12 +279,12 @@ export async function onRequestGet(context) {
 
     const downloadUrl = resolved.versionData.url;
 
-    // Validate that download URL exists and is a valid https:// endpoint
-    if (typeof downloadUrl !== "string" || !downloadUrl.startsWith("https://")) {
+    // Validate that download URL is a syntactically valid HTTPS endpoint on a trusted storage host
+    if (!isTrustedDownloadUrl(downloadUrl, env)) {
       return new Response(
-        `Invalid download URL configured for app '${slug}'.\n`,
+        `Untrusted or invalid download URL configured for app '${slug}'.\n`,
         {
-          status: 404,
+          status: 403,
           headers: { "Content-Type": "text/plain; charset=utf-8" }
         }
       );
@@ -231,9 +300,18 @@ export async function onRequestGet(context) {
     const slug = segments[0];
     const requestedVersion = segments[1] || null;
 
+    if (!isValidSlug(slug)) {
+      return new Response("Invalid app slug format.\n", {
+        status: 400,
+        headers: { "Content-Type": "text/plain; charset=utf-8" }
+      });
+    }
+
+    const allowMock = isMockFallbackEnabled(request, env);
     let config = null;
     let installerScript = null;
     let canonicalSlug = slug;
+    let scriptSource = "live";
     const entry = findAppEntry(slug);
 
     if (entry) {
@@ -248,13 +326,14 @@ export async function onRequestGet(context) {
       }
     }
 
-    // Fallback to sample app if live repository is offline or unconfigured
-    if (!config) {
+    // Fallback to sample app ONLY when mock fallback is permitted
+    if (!config && allowMock) {
       const mockApp = findMockApp(slug);
       if (mockApp) {
         config = mockApp;
         canonicalSlug = mockApp.slug;
         installerScript = getMockInstaller(mockApp.slug);
+        scriptSource = "mock";
       }
     }
 
@@ -285,18 +364,20 @@ export async function onRequestGet(context) {
       });
     }
 
-    // Sanitize canonical slug and targetVersion before interpolating into PowerShell variables
+    // Sanitize canonical slug, targetVersion, and appName before interpolating into PowerShell variables
     const safeSlug = (canonicalSlug || slug).replace(/[^a-zA-Z0-9._-]/g, "");
     const safeVersion = String(targetVersion).replace(/[^a-zA-Z0-9._-]/g, "");
+    const safeName = String(config.name || canonicalSlug || slug).replace(/[^a-zA-Z0-9 ._()-]/g, "");
 
-    const injectedHeader = `$APP_SLUG = "${safeSlug}"\r\n$APP_VERSION = "${safeVersion}"\r\n\r\n`;
+    const injectedHeader = `$APP_SLUG = "${safeSlug}"\r\n$APP_VERSION = "${safeVersion}"\r\n$APP_NAME = "${safeName}"\r\n\r\n`;
     const fullScript = injectedHeader + installerScript;
 
     return new Response(fullScript, {
       status: 200,
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "public, max-age=300"
+        "Cache-Control": scriptSource === "live" ? "public, max-age=300" : "no-store",
+        "X-Catalog-Source": scriptSource
       }
     });
   }

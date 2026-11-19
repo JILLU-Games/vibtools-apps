@@ -29,6 +29,7 @@ async function bootstrap() {
   let currentSearchQuery = initialParams.get("q") || "";
   let activeAccessFilter = "all";
   let searchDebounceTimer = null;
+  let activeViewCleanup = null;
   const initialRoute = getCurrentRoute();
 
   // Sync URL query param (?q=...) without triggering a full navigation
@@ -84,6 +85,7 @@ async function bootstrap() {
   }
 
   function resetAllFilters() {
+    clearTimeout(searchDebounceTimer);
     currentSearchQuery = "";
     activeAccessFilter = "all";
     layout.resetSearch();
@@ -98,6 +100,13 @@ async function bootstrap() {
 
   // 5. View Renderer
   function renderCurrentView(route) {
+    if (typeof activeViewCleanup === "function") {
+      try {
+        activeViewCleanup();
+      } catch (_) {}
+      activeViewCleanup = null;
+    }
+
     updateDocumentTitle(route);
     layout.updateActiveRoute(route);
     layout.viewRoot.innerHTML = "";
@@ -123,6 +132,7 @@ async function bootstrap() {
 
       case "app": {
         const detail = AppDetailView({ slug: route.slug });
+        activeViewCleanup = typeof detail.cleanup === "function" ? detail.cleanup : null;
         layout.viewRoot.appendChild(detail);
         break;
       }
@@ -145,7 +155,12 @@ async function bootstrap() {
 
   // 6. Subscribe to Route Changes (Browser Back/Forward & navigate calls)
   onRouteChange((newRoute) => {
-    if (newRoute.view !== "home" && newRoute.view !== "category") {
+    clearTimeout(searchDebounceTimer);
+    if (newRoute.view === "home" || newRoute.view === "category") {
+      const urlQuery = new URLSearchParams(window.location.search).get("q") || "";
+      currentSearchQuery = urlQuery;
+      layout.setSearchValue(urlQuery);
+    } else {
       currentSearchQuery = "";
       activeAccessFilter = "all";
       layout.resetSearch();

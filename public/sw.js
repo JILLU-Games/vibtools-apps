@@ -2,7 +2,7 @@
  * Service Worker for apps.vib.tools (PWA & Offline Shell).
  */
 
-const CACHE_NAME = "vib-apps-hub-v2";
+const CACHE_NAME = "vib-apps-hub-v3";
 
 const STATIC_ASSETS = [
   "/",
@@ -36,7 +36,10 @@ const STATIC_ASSETS = [
   "/favicon.ico",
   "/apple-touch-icon.png",
   "/vib.tools.Branding/favicon.svg",
-  "/vib.tools.Branding/favicon-96x96.png"
+  "/vib.tools.Branding/favicon-96x96.png",
+  "/vib.tools.Branding/web-app-manifest-192x192.png",
+  "/vib.tools.Branding/web-app-manifest-512x512.png",
+  "/icons/icon.svg"
 ];
 
 self.addEventListener("install", (event) => {
@@ -58,7 +61,9 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
+  if (!url.protocol.startsWith("http")) return;
 
   // 1. API requests -> Network First (Never cache API errors)
   if (url.pathname.startsWith("/api/")) {

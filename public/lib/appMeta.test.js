@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import {
   getAppMonogram,
   getPackageFormat,
@@ -10,6 +12,8 @@ import {
   filterApps,
   computeCategoryCounts
 } from "./appMeta.js";
+import { parseRoute } from "./router.js";
+import { fetchAppDetail } from "./api.js";
 
 test("getAppMonogram derives clean 2-character fallbacks from CamelCase, multi-word, and single-word names", () => {
   assert.equal(getAppMonogram({ name: "CalGrid", slug: "calgrid" }), "CG");
@@ -68,4 +72,71 @@ test("filterApps and computeCategoryCounts filter accurately by category, access
   assert.equal(filterApps(sample, { category: "utilities", access: "free" }).length, 1);
   assert.equal(filterApps(sample, { query: "prompt" }).length, 1);
   assert.equal(filterApps(sample, { query: "nonexistent" }).length, 0);
+});
+
+// --- Cycle 2 Frontend Regression Suite (BUG-12, BUG-14, BUG-15, BUG-16) ---
+
+test("BUG-16: buildDownloadUrl routes localhost/127.0.0.1 to local ?mode=get and preserves production get.vib.tools default", () => {
+  assert.equal(buildDownloadUrl("calgrid", "v1.0.3"), "https://get.vib.tools/dl/calgrid/v1.0.3");
+  assert.equal(
+    buildDownloadUrl("calgrid", "v1.0.3", {
+      location: { hostname: "apps.vib.tools", origin: "https://apps.vib.tools" }
+    }),
+    "https://get.vib.tools/dl/calgrid/v1.0.3"
+  );
+  assert.equal(
+    buildDownloadUrl("calgrid", "v1.0.3", {
+      location: { hostname: "localhost", origin: "http://localhost:3000" }
+    }),
+    "http://localhost:3000/dl/calgrid/v1.0.3?mode=get"
+  );
+  assert.equal(
+    buildDownloadUrl("calgrid", "v1.0.3", {
+      location: { hostname: "127.0.0.1", origin: "http://127.0.0.1:3000" }
+    }),
+    "http://127.0.0.1:3000/dl/calgrid/v1.0.3?mode=get"
+  );
+});
+
+test("BUG-12 & BUG-15: AppDetailView removes fake OS/Arch selects, renders read-only metadata rows, and wires AbortController", () => {
+  const detailSrc = fs.readFileSync(
+    path.join(process.cwd(), "public/components/sections/AppDetailView.js"),
+    "utf8"
+  );
+  assert.equal(detailSrc.includes("app-platform-select"), false);
+  assert.equal(detailSrc.includes("app-arch-select"), false);
+  assert.ok(detailSrc.includes('createMetaRow("Platforms", "monitor")'));
+  assert.ok(detailSrc.includes('createMetaRow("Architecture", "cpu")'));
+  assert.ok(detailSrc.includes("new AbortController()"));
+  assert.ok(detailSrc.includes("container.isConnected"));
+});
+
+test("BUG-14: parseRoute handles dot-containing categories safely and router compares full pathname+search", () => {
+  assert.deepEqual(parseRoute("/"), { view: "home" });
+  assert.deepEqual(parseRoute("/category/Node.js"), { view: "category", category: "Node.js" });
+  assert.deepEqual(parseRoute("/app/my.app"), { view: "app", slug: "my.app" });
+  assert.deepEqual(parseRoute("/cli"), { view: "cli" });
+  assert.deepEqual(parseRoute("/category/%E0%A4%A"), { view: "category", category: "%E0%A4%A" });
+
+  const routerSrc = fs.readFileSync(path.join(process.cwd(), "public/lib/router.js"), "utf8");
+  assert.ok(routerSrc.includes("${window.location.pathname}${window.location.search}"));
+});
+
+test("BUG-15: fetchAppDetail passes through AbortError cleanly without wrapping", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (_url, init) => {
+      assert.ok(init?.signal, "AbortSignal must be forwarded to fetch");
+      const abortErr = new Error("The operation was aborted.");
+      abortErr.name = "AbortError";
+      return Promise.reject(abortErr);
+    };
+    const controller = new AbortController();
+    await assert.rejects(
+      () => fetchAppDetail("calgrid", { signal: controller.signal }),
+      (err) => err?.name === "AbortError"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

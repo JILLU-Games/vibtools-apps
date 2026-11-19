@@ -8,8 +8,34 @@ import {
 import {
   getMockApps,
   findMockApp,
-  getMockDoc
+  getMockDoc,
+  isMockFallbackEnabled
 } from "../_lib/mockData.js";
+
+/**
+ * Returns Cloudflare Edge Cache (caches.default) when available in the runtime.
+ * @returns {Cache|null}
+ */
+function getEdgeCache() {
+  try {
+    if (typeof caches !== "undefined" && caches?.default) {
+      return caches.default;
+    }
+  } catch (_) {}
+  return null;
+}
+
+/**
+ * Checks whether the request targets the CLI-only get.vib.tools domain.
+ * @param {Request} request
+ * @param {URL} url
+ * @returns {boolean}
+ */
+function isGetDomainRequest(request, url) {
+  const rawHost = request?.headers?.get("host") || url?.host || "";
+  const host = rawHost.toLowerCase().replace(/:\d+$/, "");
+  return host === "get.vib.tools" || url?.searchParams?.get("mode") === "get";
+}
 
 /**
  * Cloudflare Pages Function: Store API handler (/api/apps).
@@ -24,6 +50,18 @@ import {
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
+
+  // Isolate Store JSON API strictly away from the CLI-only get.vib.tools domain
+  if (isGetDomainRequest(request, url)) {
+    return new Response("Not Found\n", {
+      status: 404,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store"
+      }
+    });
+  }
+
   const slugParam = url.searchParams.get("slug");
 
   const headers = {
@@ -35,6 +73,8 @@ export async function onRequestGet(context) {
   };
 
   try {
+    const cache = getEdgeCache();
+
     // Mode B: Single App Details & Markdown Docs
     if (slugParam !== null) {
       const slug = slugParam.trim();
@@ -44,8 +84,30 @@ export async function onRequestGet(context) {
             error: "Bad Request",
             message: `Invalid slug format '${slugParam}'. Slugs must be 1-64 alphanumeric characters, hyphens, or underscores.`
           }),
-          { status: 400, headers }
+          { status: 400, headers: { ...headers, "Cache-Control": "no-store" } }
         );
+      }
+
+      const detailCacheKey = new Request(
+        `https://apps.vib.tools/__cache/api/apps/detail/${encodeURIComponent(slug.toLowerCase())}`
+      );
+
+      // 1. Check Cloudflare Edge Cache for single-app detail response
+      if (cache) {
+        try {
+          const cachedDetail = await cache.match(detailCacheKey);
+          if (cachedDetail) {
+            const cachedJson = await cachedDetail.text();
+            return new Response(cachedJson, {
+              status: 200,
+              headers: {
+                ...headers,
+                "X-Cache-Status": "HIT",
+                "X-Catalog-Source": "live"
+              }
+            });
+          }
+        } catch (_) {}
       }
 
       const entry = findAppEntry(slug);
@@ -64,14 +126,18 @@ export async function onRequestGet(context) {
         }
       }
 
-      // Fallback to sample app if live repository is offline, unconfigured, or missing
-      if (!config) {
+      const allowMock = isMockFallbackEnabled(request, env);
+      let catalogSource = "live";
+
+      // Fallback to sample app ONLY when mock fallback is explicitly enabled (or local/preview dev)
+      if (!config && allowMock) {
         const mockApp = findMockApp(slug);
         if (mockApp) {
           const { installerScript, docsData, ...cleanMockConfig } = mockApp;
           config = cleanMockConfig;
           featuresMd = getMockDoc(slug, "features");
           changelogMd = getMockDoc(slug, "changelog");
+          catalogSource = "mock";
         }
       }
 
@@ -81,31 +147,55 @@ export async function onRequestGet(context) {
             error: "Not Found",
             message: `App with slug '${slug}' was not found in registry or catalog.`
           }),
-          { status: 404, headers }
+          { status: 404, headers: { ...headers, "Cache-Control": "no-store" } }
         );
       }
 
-      return new Response(
-        JSON.stringify({
-          app: config,
-          docs: {
-            features: featuresMd,
-            changelog: changelogMd
+      const detailPayloadText = JSON.stringify({
+        app: config,
+        docs: {
+          features: featuresMd,
+          changelog: changelogMd
+        }
+      });
+
+      const isCacheableLiveDetail = catalogSource === "live";
+
+      // 2. Store ONLY verified live single-app detail responses in Edge Cache (300s TTL)
+      if (cache && isCacheableLiveDetail) {
+        try {
+          const cacheResponse = new Response(detailPayloadText, {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "public, max-age=300",
+              "Access-Control-Allow-Origin": "*",
+              "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type, Authorization",
+              "X-Catalog-Source": "live"
+            }
+          });
+          if (context.waitUntil) {
+            context.waitUntil(cache.put(detailCacheKey, cacheResponse));
+          } else {
+            await cache.put(detailCacheKey, cacheResponse);
           }
-        }),
-        { status: 200, headers }
-      );
+        } catch (_) {}
+      }
+
+      return new Response(detailPayloadText, {
+        status: 200,
+        headers: {
+          ...headers,
+          "Cache-Control": isCacheableLiveDetail ? "public, max-age=300" : "no-store",
+          "X-Cache-Status": isCacheableLiveDetail ? "MISS" : "BYPASS",
+          "X-Catalog-Source": catalogSource
+        }
+      });
     }
 
     // Mode A: Catalog List of All Registered Apps
     // 1. Check Cloudflare Edge Cache for aggregated catalog
-    let cache = null;
-    try {
-      if (typeof caches !== "undefined" && caches?.default) {
-        cache = caches.default;
-      }
-    } catch (_) {}
-
     const cacheKeyUrl = "https://apps.vib.tools/__cache/api/apps/catalog";
     const cacheKey = new Request(cacheKeyUrl);
 
@@ -118,7 +208,8 @@ export async function onRequestGet(context) {
             status: 200,
             headers: {
               ...headers,
-              "X-Cache-Status": "HIT"
+              "X-Cache-Status": "HIT",
+              "X-Catalog-Source": "live"
             }
           });
         }
@@ -147,10 +238,13 @@ export async function onRequestGet(context) {
       }
     });
 
-    // If no live apps were loaded (offline dev, mock repos, or GitHub rate limits), activate fallback catalog
-    if (apps.length === 0) {
+    // Activate fallback catalog ONLY when permitted (never leak demo apps on live prod domains)
+    const allowMock = isMockFallbackEnabled(request, env);
+    let catalogSource = "live";
+    if (apps.length === 0 && allowMock) {
       const mockApps = getMockApps();
       apps.push(...mockApps);
+      catalogSource = "mock";
     }
 
     const payloadText = JSON.stringify({
@@ -158,8 +252,10 @@ export async function onRequestGet(context) {
       count: apps.length
     });
 
-    // 2. Store aggregated catalog in Edge Cache with 300s TTL
-    if (cache) {
+    const isCacheableLiveCatalog = catalogSource === "live" && apps.length > 0;
+
+    // 2. Store ONLY verified live catalogs in Edge Cache with 300s TTL (never poison cache with mock/empty data)
+    if (cache && isCacheableLiveCatalog) {
       try {
         const cacheResponse = new Response(payloadText, {
           status: 200,
@@ -168,7 +264,8 @@ export async function onRequestGet(context) {
             "Cache-Control": "public, max-age=300",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization"
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "X-Catalog-Source": "live"
           }
         });
         if (context.waitUntil) {
@@ -183,7 +280,9 @@ export async function onRequestGet(context) {
       status: 200,
       headers: {
         ...headers,
-        "X-Cache-Status": "MISS"
+        "Cache-Control": isCacheableLiveCatalog ? "public, max-age=300" : "no-store",
+        "X-Cache-Status": isCacheableLiveCatalog ? "MISS" : "BYPASS",
+        "X-Catalog-Source": catalogSource
       }
     });
   } catch (err) {
@@ -193,16 +292,30 @@ export async function onRequestGet(context) {
         error: "Internal Server Error",
         message: err?.message || "An unexpected error occurred."
       }),
-      { status: 500, headers }
+      { status: 500, headers: { ...headers, "Cache-Control": "no-store" } }
     );
   }
 }
 
 /**
  * Handles CORS preflight OPTIONS requests for /api/apps.
- * @returns {Response}
+ * @param {EventContext} [context]
+ * @returns {Promise<Response>}
  */
-export async function onRequestOptions() {
+export async function onRequestOptions(context) {
+  if (context?.request) {
+    const url = new URL(context.request.url);
+    if (isGetDomainRequest(context.request, url)) {
+      return new Response("Not Found\n", {
+        status: 404,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store"
+        }
+      });
+    }
+  }
+
   return new Response(null, {
     status: 204,
     headers: {

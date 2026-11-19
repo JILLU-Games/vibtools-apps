@@ -2,24 +2,25 @@
 
 > **Active Project:** `vib-apps-hub`  
 > **Target Domains:** `apps.vib.tools` (App Catalog) & `get.vib.tools` (Edge CLI & Direct Download Router)  
-> **Last Updated:** 2026-11-19 (Vib Docs Engine Dual-Portal Configuration Completed)
+> **Last Updated:** 2026-11-19 (Cycle 2 Production Hardening Completed — 4/4 Phases, 18/18 Bugs Closed)
 
 ---
 
 ## 1. Current Status
 
-- **Project Status:** Production Ready & Hardened (All 4 Phases + UI/UX Marketplace Refinement + Vib Docs Engine Configuration Completed)
+- **Project Status:** **Production-Hardened & Ready for Cloudflare Pages Deployment** (Cycle 2 **4 / 4 Phases Completed**, **18 / 18 Bugs Closed**, `npm test` **29 / 29 PASS**)
 - **Git Repository:** `https://github.com/JILLU-Games/vibtools-apps.git` (Pushed to branch `main`)
-- **Active / Next Phase:** Ready for Production Deployment to Cloudflare Pages
+- **Active / Next Phase:** Operational Production Launch (populate live app entries in `registry.json`, configure `GITHUB_TOKEN` secret in Cloudflare Pages, and bind `apps.vib.tools` & `get.vib.tools`)
 - **Completed BugFix & Refinement Phases:**
-  - Phase 1 (Mock/Demo Fallback Engine)
-  - Phase 2 (Edge Routing, CORS & CLI Normalization)
-  - Phase 3 (Frontend UI Parity & Mobile Experience)
-  - Phase 4 (Caching Scalability, Dynamic Titles & PWA Polish)
+  - Cycle 1 Phases 1–4 (Mock Engine, Edge Routing/CORS, Frontend UI Parity, Caching/PWA)
   - Node.js 22 Edge Emulator & Dev Server (`server.js` & `package.json` on Port 3000)
-  - Production Marketplace UI/UX Audit & Refinement (Zero-build 3-zone app cards, 2-column sticky detail layout, license/access filter, Discover/Categories/Resources sidebar with live counts, expandable SHA256, ARIA tabs, WCAG AA dual-theme contrast, mobile header/toast fixes, SW `vib-apps-hub-v2`)
-  - Vib Docs Engine Dual-Portal Configuration (`.vibtools/docs.config.json` conforming to frozen schema v1 with `"docsType": "both"`, `.vibtools/logo.png`, structured `docs/users/` & `docs/dev/` trees, stray `docs/MINIFEST.md` removed, 10/10 self-verification checklist passed)
-- **Execution Strategy:** 4-Phase Sequential Roadmap with Strict Scope Locks (100% Successfully Completed)
+  - Production Marketplace UI/UX Audit & Refinement
+  - Vib Docs Engine Dual-Portal Configuration (`.vibtools/docs.config.json`, `docs/users/`, `docs/dev/`)
+  - **Cycle 2 Phase 1 (2026-11-19):** Production Data, Security & Crash Hardening (`BUG-01`–`BUG-05`: env-gated `isMockFallbackEnabled` + zero mock cache poisoning, `$APP_NAME` + real `Invoke-WebRequest`/SHA256 demo scripts, safe `decodeURIComponent` `400` handling, `isTrustedDownloadUrl` HTTPS host allowlist `403`, `isValidSlug` + `Object.hasOwn` enforcement across `get.vib.tools`, `Cache-Control: no-store` on API errors)
+  - **Cycle 2 Phase 2 (2026-11-19):** Backend Edge Engine, Caching & Routing Parity (`BUG-06`–`BUG-11`: live-only Mode B `caches.default` `300s` TTL with `X-Cache-Status`/`X-Catalog-Source`, single clean SPA `Content-Type` header, browser `302` redirect for `get.vib.tools/<slug>/<version>`, `get.vib.tools` `/api/apps` `404` domain isolation on `GET`/`OPTIONS`, dot-safe SPA reload routing for `/category/Node.js` & `/category/.NET` vs real missing static asset `404`, deep `validateAppConfig()` `422` validation, and `server.js` `405 Method Not Allowed` with `Allow: GET, HEAD`)
+  - **Cycle 2 Phase 3 (2026-11-19):** Frontend Real Functionality, SPA State & Public Asset Hygiene (`BUG-12`–`BUG-16`: honest read-only Platforms & Architecture metadata rows replacing non-functional selects, removal of exposed `public/assets/aistudio/`, placeholder `site.webmanifest`, and unused `styles.css`, full `pathname + search` navigation comparison + `?q=` `popstate` sync, `AbortController` + `isConnected` race protection in `AppDetailView.js`/`api.js`/`app.js`, and environment-aware `buildDownloadUrl()`; verified `25/25` in headless Chromium)
+  - **Cycle 2 Phase 4 (2026-11-19):** PWA Polish & Full Automated Regression Test Suite (`BUG-17`–`BUG-18`: `public/sw.js` cache bumped to `vib-apps-hub-v3` with complete `manifest.json` icon precaching + early non-`GET`/non-HTTP fetch guard; `npm test` runs both backend & frontend suites with full 18-bug regression coverage — `29/29 PASS`)
+- **Execution Strategy:** Cycle 2 4-Phase Sequential Roadmap — **Completed 4/4** (`notes/phases/phase_tracker.md`)
 
 ---
 

@@ -39,6 +39,10 @@ export const MOCK_APPS = [
     },
     installerScript: `# CalGrid Automated PowerShell Installer
 $ErrorActionPreference = 'Stop'
+if (-not $APP_NAME) { $APP_NAME = "CalGrid" }
+if (-not $APP_SLUG) { $APP_SLUG = "calgrid" }
+if (-not $APP_VERSION) { $APP_VERSION = "v1.0.3" }
+
 Write-Host "Installing $APP_NAME ($APP_VERSION)..." -ForegroundColor Cyan
 
 $InstallDir = "$env:LOCALAPPDATA\\Programs\\$APP_SLUG"
@@ -46,9 +50,19 @@ if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-Write-Host "Downloading $APP_NAME from https://get.vib.tools/dl/$APP_SLUG/$APP_VERSION..."
-# Binary extraction and desktop shortcut creation logic
-Write-Host "$APP_NAME installation complete!" -ForegroundColor Green
+$DownloadUrl = "https://get.vib.tools/dl/$APP_SLUG/$APP_VERSION"
+$TargetFile = Join-Path $InstallDir "$APP_SLUG-$APP_VERSION-setup.exe"
+
+try {
+    Write-Host "Downloading $APP_NAME from $DownloadUrl..."
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $TargetFile -UseBasicParsing
+    $Hash = (Get-FileHash -Path $TargetFile -Algorithm SHA256).Hash.ToLower()
+    Write-Host "Downloaded to $TargetFile (SHA256: $Hash)" -ForegroundColor DarkGray
+    Write-Host "$APP_NAME installation package ready!" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to download $APP_NAME ($APP_VERSION): $_"
+    exit 1
+}
 `,
     docsData: {
       features: `# CalGrid Features
@@ -105,6 +119,10 @@ CalGrid is a minimalist desktop calendar widget designed for developers and powe
     },
     installerScript: `# DevPrompt Automated PowerShell Installer
 $ErrorActionPreference = 'Stop'
+if (-not $APP_NAME) { $APP_NAME = "DevPrompt" }
+if (-not $APP_SLUG) { $APP_SLUG = "devprompt" }
+if (-not $APP_VERSION) { $APP_VERSION = "v2.1.0" }
+
 Write-Host "Installing $APP_NAME ($APP_VERSION)..." -ForegroundColor Cyan
 
 $InstallDir = "$env:LOCALAPPDATA\\Programs\\$APP_SLUG"
@@ -112,8 +130,20 @@ if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-Write-Host "Downloading $APP_NAME from https://get.vib.tools/dl/$APP_SLUG/$APP_VERSION..."
-Write-Host "$APP_NAME installation complete!" -ForegroundColor Green
+$DownloadUrl = "https://get.vib.tools/dl/$APP_SLUG/$APP_VERSION"
+$TargetFile = Join-Path $InstallDir "$APP_SLUG-$APP_VERSION.zip"
+
+try {
+    Write-Host "Downloading $APP_NAME from $DownloadUrl..."
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $TargetFile -UseBasicParsing
+    $Hash = (Get-FileHash -Path $TargetFile -Algorithm SHA256).Hash.ToLower()
+    Write-Host "Downloaded to $TargetFile (SHA256: $Hash)" -ForegroundColor DarkGray
+    Expand-Archive -Path $TargetFile -DestinationPath $InstallDir -Force
+    Write-Host "$APP_NAME installation complete!" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to install $APP_NAME ($APP_VERSION): $_"
+    exit 1
+}
 `,
     docsData: {
       features: `# DevPrompt Features
@@ -160,6 +190,10 @@ DevPrompt is a native desktop prompt engineer workbench for crafting, debugging,
     },
     installerScript: `# VibClip Automated PowerShell Installer
 $ErrorActionPreference = 'Stop'
+if (-not $APP_NAME) { $APP_NAME = "VibClip" }
+if (-not $APP_SLUG) { $APP_SLUG = "vibclip" }
+if (-not $APP_VERSION) { $APP_VERSION = "v1.4.0" }
+
 Write-Host "Installing $APP_NAME ($APP_VERSION)..." -ForegroundColor Cyan
 
 $InstallDir = "$env:LOCALAPPDATA\\Programs\\$APP_SLUG"
@@ -167,8 +201,19 @@ if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-Write-Host "Downloading $APP_NAME from https://get.vib.tools/dl/$APP_SLUG/$APP_VERSION..."
-Write-Host "$APP_NAME installation complete!" -ForegroundColor Green
+$DownloadUrl = "https://get.vib.tools/dl/$APP_SLUG/$APP_VERSION"
+$TargetFile = Join-Path $InstallDir "$APP_SLUG-$APP_VERSION.exe"
+
+try {
+    Write-Host "Downloading $APP_NAME from $DownloadUrl..."
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $TargetFile -UseBasicParsing
+    $Hash = (Get-FileHash -Path $TargetFile -Algorithm SHA256).Hash.ToLower()
+    Write-Host "Downloaded to $TargetFile (SHA256: $Hash)" -ForegroundColor DarkGray
+    Write-Host "$APP_NAME installation package ready!" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to download $APP_NAME ($APP_VERSION): $_"
+    exit 1
+}
 `,
     docsData: {
       features: `# VibClip Features
@@ -231,3 +276,37 @@ export function getMockInstaller(slug) {
   const app = findMockApp(slug);
   return app ? app.installerScript || null : null;
 }
+
+/**
+ * Determines whether demo/mock fallback data is permitted for the active request.
+ *
+ * Precedence:
+ * 1. Explicit env.ENABLE_MOCK_FALLBACK ("true"/"1" enables, "false"/"0" disables).
+ * 2. Hostname default: enabled on local/preview hosts (localhost, 127.0.0.1, *.pages.dev, *.run.app),
+ *    strictly disabled on live production custom domains (e.g., apps.vib.tools, get.vib.tools).
+ *
+ * @param {Request} request
+ * @param {Object} [env]
+ * @returns {boolean}
+ */
+export function isMockFallbackEnabled(request, env) {
+  const flag = String(env?.ENABLE_MOCK_FALLBACK ?? "").trim().toLowerCase();
+  if (flag === "true" || flag === "1") return true;
+  if (flag === "false" || flag === "0") return false;
+
+  let host = "";
+  try {
+    const rawHost = request?.headers?.get("host") || new URL(request.url).host || "";
+    host = rawHost.toLowerCase().replace(/:\d+$/, "");
+  } catch (_) {
+    host = "";
+  }
+
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.endsWith(".pages.dev") ||
+    host.endsWith(".run.app")
+  );
+}
+

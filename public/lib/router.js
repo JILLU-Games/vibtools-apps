@@ -60,7 +60,8 @@ export function getCurrentRoute() {
  */
 export function navigate(path) {
   if (typeof window === "undefined") return;
-  if (window.location.pathname === path) return;
+  const currentFull = `${window.location.pathname}${window.location.search}`;
+  if (currentFull === path) return;
 
   window.history.pushState({}, "", path);
   notifyListeners();

@@ -72,7 +72,15 @@ const MIME_TYPES = {
 export async function serveStaticAsset(input) {
   const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const parsedUrl = new URL(urlStr, "http://localhost:3000");
-  let pathname = decodeURIComponent(parsedUrl.pathname);
+  let pathname;
+  try {
+    pathname = decodeURIComponent(parsedUrl.pathname);
+  } catch (_) {
+    return new Response("Bad Request: Malformed URL encoding.\n", {
+      status: 400,
+      headers: { "Content-Type": "text/plain; charset=utf-8" }
+    });
+  }
 
   if (pathname === "/" || pathname === "") {
     pathname = "/index.html";
@@ -152,7 +160,18 @@ export async function handleEdgeRequest(webRequest) {
     });
   }
 
-  // All other routes pass through functions/[[path]].js wildcard handler
+  // Enforce read-only GET/HEAD parity with Cloudflare Pages onRequestGet handler
+  if (webRequest.method !== "GET" && webRequest.method !== "HEAD") {
+    return new Response("Method Not Allowed\n", {
+      status: 405,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Allow": "GET, HEAD"
+      }
+    });
+  }
+
+  // All other GET/HEAD routes pass through functions/[[path]].js wildcard handler
   return await wildcardGet(context);
 }
 
