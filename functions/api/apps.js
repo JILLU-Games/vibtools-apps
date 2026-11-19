@@ -1,6 +1,6 @@
 import {
   getRegistry,
-  findAppEntry,
+  resolveAppBySlug,
   isValidSlug,
   fetchAppConfig,
   fetchAppDoc
@@ -110,20 +110,17 @@ export async function onRequestGet(context) {
         } catch (_) {}
       }
 
-      const entry = findAppEntry(slug);
       let config = null;
       let featuresMd = null;
       let changelogMd = null;
 
-      if (entry) {
-        const cfgRes = await fetchAppConfig(entry, env, context);
-        if (cfgRes.ok) {
-          config = cfgRes.config;
-          [featuresMd, changelogMd] = await Promise.all([
-            fetchAppDoc(entry, config.docs?.features, env, context),
-            fetchAppDoc(entry, config.docs?.changelog, env, context)
-          ]);
-        }
+      const resolvedApp = await resolveAppBySlug(slug, env, context);
+      if (resolvedApp) {
+        config = resolvedApp.config;
+        [featuresMd, changelogMd] = await Promise.all([
+          fetchAppDoc(resolvedApp.entry, config.docs?.features, env, context, "features.md"),
+          fetchAppDoc(resolvedApp.entry, config.docs?.changelog, env, context, "changelog.md")
+        ]);
       }
 
       const allowMock = isMockFallbackEnabled(request, env);

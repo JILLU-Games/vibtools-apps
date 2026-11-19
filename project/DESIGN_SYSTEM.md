@@ -26,6 +26,9 @@
   - Never use oversized pill buttons or excessive border radiuses.
 - **Zero Neon Glow & Gradients:** No glowing borders, no animated gradient mesh backgrounds, and no harsh highlights.
 - **Color Discipline:** 1–2 soft, clean accent colors across the entire application.
+- **Scrollbar Discipline (Compact & Clean):**
+  - **Global Scrollbars:** All scrollable surfaces (`html`, `body`, code boxes, modals, category bars) use a flat `1px` scrollbar (`--scrollbar-size: 1px`) with a transparent track (`--scrollbar-track`), flat square thumb (`border-radius: 0`, `--scrollbar-thumb` / `--scrollbar-thumb-hover`), and hidden scrollbar arrows/corners. Non-WebKit engines fall back to `scrollbar-width: thin` via `@supports not selector(::-webkit-scrollbar)`.
+  - **Sidebar Scrollbar Removed:** `.app-sidebar` and its descendants hide scrollbars completely (`scrollbar-width: none`, `-ms-overflow-style: none`, `::-webkit-scrollbar { display: none; width: 0; height: 0; }`) while preserving vertical scrollability when content overflows.
 
 ---
 
@@ -39,15 +42,19 @@ Theme values are declared as CSS custom properties in `public/styles/tokens.css`
 | :--- | :--- | :--- | :--- |
 | `--bg-canvas` | `#0d1117` | `#f6f8fa` | Page root background |
 | `--bg-surface` | `#161b22` | `#ffffff` | Card, sidebar, header, modal backgrounds |
-| `--bg-subtle` | `#21262d` | `#eaeef2` | Input fields, code containers, active/hover states |
+| `--bg-subtle` | `#1b2028` | `#eaeef2` | Input fields, code containers, active/hover states |
 | `--border-default` | `#30363d` | `#d0d7de` | 1px border for containers, cards, dividers |
 | `--border-muted` | `#21262d` | `#e1e4e8` | Subtle interior borders and tab rules |
 | `--accent-primary` | `#1d6cf6` | `#0969da` | Action buttons, active navigation, focus rings |
-| `--accent-hover` | `#1a5ecc` | `#0854b0` | Hover state for accent actions |
+| `--accent-hover` | `#317df8` | `#0854b0` | Hover state for accent actions |
 | `--text-primary` | `#e6edf3` | `#1f2328` | Main body text, titles, headings |
-| `--text-muted` | `#8b949e` | `#656d76` | Secondary labels, timestamps, metadata |
+| `--text-muted` | `#7d8590` | `#656d76` | Secondary labels, timestamps, metadata |
 | `--badge-free-bg` | `#238636` | `#1a7f37` | Free tier badge |
 | `--badge-paid-bg` | `#8957e5` | `#8250df` | Paid/License badge |
+| `--scrollbar-size` | `1px` | `1px` | Global compact scrollbar width/height |
+| `--scrollbar-track` | `transparent` | `transparent` | Global scrollbar track background |
+| `--scrollbar-thumb` | `var(--border-color)` (`#30363d`) | `var(--border-color)` (`#d0d7de`) | Global flat 1px scrollbar thumb |
+| `--scrollbar-thumb-hover` | `var(--border-strong)` (`#484f58`) | `var(--border-strong)` (`#afb8c1`) | Hover state for global scrollbar thumb |
 
 ---
 

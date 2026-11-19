@@ -1,0 +1,104 @@
+# Vib Apps Engine — AI & Developer Specification
+
+> Canonical Schema: https://apps.vib.tools/schemas/vibtools-app.schema.json
+> Full Guide: https://apps.vib.tools/vib-apps-engine/vibtools-app-config.md
+> Storefront: https://apps.vib.tools
+> Edge Installer & Download Router: https://get.vib.tools
+
+## Purpose
+Any GitHub repository (public or private) can publish an application to `apps.vib.tools` and `get.vib.tools` simply by adding `.vibtools/apps/app.config.json` inside the repository and adding its GitHub repository URL to `registry.json` in `vib-apps-hub`.
+
+## Required Repository Layout
+```text
+<app-repository-root>/
+└── .vibtools/
+    └── apps/
+        ├── app.config.json    # Required — conforms strictly to vibtools-app.schema.json (schemaVersion: 1)
+        ├── installer.ps1      # Default PowerShell installer script (or provide an HTTPS URL in installer)
+        ├── features.md        # Markdown rendered in the "Features & Overview" tab
+        └── changelog.md       # Markdown rendered in the "Release Changelog" tab
+```
+
+## Frozen Schema Contract (schemaVersion: 1)
+- Do NOT invent custom keys (`additionalProperties: false` is enforced on root and version objects).
+- Always include:
+  - `"$schema": "https://apps.vib.tools/schemas/vibtools-app.schema.json"`
+  - `"schemaVersion": 1`
+  - `"slug"` (`^[a-z0-9][a-z0-9-_]{0,63}$`)
+  - `"name"` (display name)
+  - `"latest"` (must match an exact key in `versions`)
+  - `"versions"` (object map of version keys to release objects)
+- Each version object under `versions.<ver>` requires:
+  - `"url"`: direct `https://` download URL on a trusted host (`dl.vib.tools`, `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com`, or configured `ALLOWED_DOWNLOAD_HOSTS`).
+- Optional version fields:
+  - `"installer"`: per-version installer override (repo-relative path like `.vibtools/apps/installers/v1.0.2.ps1`, trusted `https://` script URL, or `{ "type": "powershell", "script": "..." }`). When omitted, inherits the root `installer`.
+  - `"size"`: e.g. `"42.8 MB"`
+  - `"sha256"`: 64-char hex checksum
+  - `"released_at"`: strict `"YYYY-MM-DD"` (do NOT use `releaseDate`)
+  - `"channel"`: `"stable" | "beta" | "alpha"`
+  - `"deprecated"`: `true | false`
+
+## Minimal Valid Example (.vibtools/apps/app.config.json)
+```json
+{
+  "$schema": "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+  "schemaVersion": 1,
+  "slug": "calgrid",
+  "name": "CalGrid",
+  "tagline": "Minimalist desktop calendar widget and event scheduler",
+  "category": "Productivity",
+  "access": "Free",
+  "icon": "https://dl.vib.tools/calgrid/icon.png",
+  "latest": "v1.0.3",
+  "installer": {
+    "type": "powershell",
+    "script": ".vibtools/apps/installer.ps1"
+  },
+  "docs": {
+    "features": ".vibtools/apps/features.md",
+    "changelog": ".vibtools/apps/changelog.md"
+  },
+  "platforms": ["Windows 10/11"],
+  "architectures": ["x64"],
+  "versions": {
+    "v1.0.3": {
+      "url": "https://dl.vib.tools/calgrid/v1.0.3/CalGrid-Setup-1.0.3.exe",
+      "size": "42.8 MB",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "released_at": "2026-11-15"
+    },
+    "v1.0.2": {
+      "url": "https://dl.vib.tools/calgrid/v1.0.2/CalGrid-Setup-1.0.2.exe",
+      "installer": "https://dl.vib.tools/calgrid/v1.0.2/install.ps1",
+      "size": "41.5 MB",
+      "sha256": "9f83c605d4c82c3dd9e3b909c29fca53ca74c70284c717ec010746ff79c57c4c",
+      "released_at": "2026-10-28"
+    }
+  }
+}
+```
+
+## Edge Installer Contract (get.vib.tools)
+When a user runs:
+- `irm "https://get.vib.tools/<slug>" | iex` (installs `latest`)
+- `irm "https://get.vib.tools/<slug>/<version>" | iex` (installs specific version)
+
+`get.vib.tools` resolves the target version, picks `versions[version].installer` (or falls back to root `installer`), and prepends three sanitized PowerShell variables before streaming the script:
+```powershell
+$APP_SLUG = "calgrid"
+$APP_VERSION = "v1.0.3"
+$APP_NAME = "CalGrid"
+```
+
+Direct binary downloads route through:
+- `https://get.vib.tools/dl/<slug>` -> 302 redirect to `versions[latest].url`
+- `https://get.vib.tools/dl/<slug>/<version>` -> 302 redirect to `versions[version].url`
+
+## Registering a Repository in vib-apps-hub
+Add the GitHub repository URL directly to `registry.json`:
+```json
+[
+  "https://github.com/vib-tools/calgrid"
+]
+```
+The hub automatically extracts `owner/repo`, fetches `.vibtools/apps/app.config.json`, discovers `slug`, loads Markdown docs, and routes every version and installer.

@@ -1,5 +1,55 @@
 import registry from "../../registry.json" with { type: "json" };
 
+export const DEFAULT_TRUSTED_DOWNLOAD_HOSTS = [
+  "dl.vib.tools",
+  "github.com",
+  "objects.githubusercontent.com",
+  "release-assets.githubusercontent.com"
+];
+
+export const DEFAULT_TRUSTED_INSTALLER_HOSTS = [
+  ...DEFAULT_TRUSTED_DOWNLOAD_HOSTS,
+  "raw.githubusercontent.com"
+];
+
+const FROZEN_ROOT_KEYS = new Set([
+  "$schema",
+  "schemaVersion",
+  "slug",
+  "name",
+  "tagline",
+  "category",
+  "access",
+  "icon",
+  "latest",
+  "installer",
+  "docs",
+  "platforms",
+  "architectures",
+  "requirements",
+  "screenshots",
+  "links",
+  "versions"
+]);
+
+const FROZEN_VERSION_KEYS = new Set([
+  "url",
+  "installer",
+  "size",
+  "sha256",
+  "released_at",
+  "channel",
+  "deprecated"
+]);
+
+const ALLOWED_INSTALLER_TYPES = new Set(["powershell", "bash", "sh", "cmd"]);
+const ALLOWED_CHANNELS = new Set(["stable", "beta", "alpha"]);
+const ALLOWED_ACCESS = new Set(["Free", "Paid"]);
+const VERSION_KEY_RE = /^[vV]?[0-9A-Za-z][0-9A-Za-z._+-]{0,47}$/;
+const SHA256_RE = /^[a-fA-F0-9]{64}$/;
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const GITHUB_SEGMENT_RE = /^[A-Za-z0-9._-]+$/;
+
 /**
  * Validates a slug against safe alphanumeric & hyphen naming standards.
  * Prevents directory traversal and injection attacks.
@@ -15,36 +65,214 @@ export function isValidSlug(slug) {
 }
 
 /**
- * Returns the normalized array of registered app repositories from registry.json.
+ * Validates that a remote binary download URL is a syntactically valid HTTPS URL
+ * pointing strictly to an allowlisted binary storage host (prevents open redirects).
  *
- * @returns {Array<Object>}
+ * @param {string} rawUrl
+ * @param {Object} [env]
+ * @returns {boolean}
  */
-export function getRegistry() {
-  if (Array.isArray(registry)) {
-    return registry;
-  }
-  if (registry && Array.isArray(registry.apps)) {
-    return registry.apps;
-  }
-  return [];
+export function isTrustedDownloadUrl(rawUrl, env) {
+  return isTrustedHostUrl(rawUrl, DEFAULT_TRUSTED_DOWNLOAD_HOSTS, env);
 }
 
 /**
- * Case-insensitive search for a registered app entry by its slug.
+ * Validates that a remote installer script URL is a syntactically valid HTTPS URL
+ * pointing strictly to an allowlisted host (includes raw.githubusercontent.com).
+ *
+ * @param {string} rawUrl
+ * @param {Object} [env]
+ * @returns {boolean}
+ */
+export function isTrustedInstallerUrl(rawUrl, env) {
+  return isTrustedHostUrl(rawUrl, DEFAULT_TRUSTED_INSTALLER_HOSTS, env);
+}
+
+function isTrustedHostUrl(rawUrl, baseHosts, env) {
+  if (typeof rawUrl !== "string" || !rawUrl.trim()) return false;
+
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch (_) {
+    return false;
+  }
+
+  if (parsed.protocol !== "https:") return false;
+  if (parsed.username || parsed.password) return false;
+
+  const extraHosts = String(env?.ALLOWED_DOWNLOAD_HOSTS ?? "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+
+  const allowedHosts = new Set([...baseHosts, ...extraHosts]);
+  return allowedHosts.has(parsed.hostname.toLowerCase());
+}
+
+/**
+ * Parses a GitHub repository URL or "owner/repo" shorthand into canonical form.
+ * Supports:
+ * - "https://github.com/owner/repo"
+ * - "https://github.com/owner/repo.git"
+ * - "https://github.com/owner/repo/tree/<branch>"
+ * - "github.com/owner/repo"
+ * - "owner/repo"
+ *
+ * @param {string} input
+ * @returns {{ repo: string, owner: string, name: string, branch?: string } | null}
+ */
+export function parseRepoIdentifier(input) {
+  if (typeof input !== "string") return null;
+  const raw = input.trim();
+  if (!raw) return null;
+
+  let owner = "";
+  let name = "";
+  let branch = undefined;
+
+  if (/^https?:\/\//i.test(raw) || /^github\.com\//i.test(raw)) {
+    const normalizedUrl = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    let parsed;
+    try {
+      parsed = new URL(normalizedUrl);
+    } catch (_) {
+      return null;
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    if (host !== "github.com" && host !== "www.github.com") {
+      return null;
+    }
+
+    const parts = parsed.pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+    if (parts.length < 2) return null;
+
+    owner = parts[0];
+    name = parts[1].replace(/\.git$/i, "");
+
+    if (parts[2] === "tree" && parts[3]) {
+      branch = parts.slice(3).join("/");
+    }
+  } else {
+    const parts = raw.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+    if (parts.length !== 2) return null;
+    owner = parts[0];
+    name = parts[1].replace(/\.git$/i, "");
+  }
+
+  if (
+    !owner ||
+    !name ||
+    owner === "." ||
+    owner === ".." ||
+    name === "." ||
+    name === ".." ||
+    !GITHUB_SEGMENT_RE.test(owner) ||
+    !GITHUB_SEGMENT_RE.test(name)
+  ) {
+    return null;
+  }
+
+  return {
+    repo: `${owner}/${name}`,
+    owner,
+    name,
+    ...(branch ? { branch } : {})
+  };
+}
+
+/**
+ * Normalizes a raw registry.json item (bare GitHub URL string, "owner/repo" string,
+ * or full config object) into a uniform internal registry entry.
+ *
+ * @param {string|Object} rawEntry
+ * @returns {{ repo: string, repoName: string, slug: string|null, branch: string, featured: boolean } | null}
+ */
+export function normalizeRegistryEntry(rawEntry) {
+  if (typeof rawEntry === "string") {
+    const parsed = parseRepoIdentifier(rawEntry);
+    if (!parsed) return null;
+    return {
+      repo: parsed.repo,
+      repoName: parsed.name,
+      slug: null,
+      branch: parsed.branch || "main",
+      featured: false
+    };
+  }
+
+  if (!rawEntry || typeof rawEntry !== "object" || Array.isArray(rawEntry)) {
+    return null;
+  }
+
+  const repoInput =
+    typeof rawEntry.repo === "string" && rawEntry.repo.trim()
+      ? rawEntry.repo
+      : typeof rawEntry.url === "string" && rawEntry.url.trim()
+        ? rawEntry.url
+        : "";
+
+  const parsed = parseRepoIdentifier(repoInput);
+  if (!parsed) return null;
+
+  const explicitSlug =
+    typeof rawEntry.slug === "string" && isValidSlug(rawEntry.slug)
+      ? rawEntry.slug.trim().toLowerCase()
+      : null;
+
+  const explicitBranch =
+    typeof rawEntry.branch === "string" && rawEntry.branch.trim()
+      ? rawEntry.branch.trim()
+      : null;
+
+  return {
+    repo: parsed.repo,
+    repoName: parsed.name,
+    slug: explicitSlug,
+    branch: explicitBranch || parsed.branch || "main",
+    featured: Boolean(rawEntry.featured)
+  };
+}
+
+/**
+ * Returns the normalized array of registered app repositories from registry.json.
+ *
+ * @param {Array|Object} [source=registry]
+ * @returns {Array<{ repo: string, repoName: string, slug: string|null, branch: string, featured: boolean }>}
+ */
+export function getRegistry(source = registry) {
+  const rawList = Array.isArray(source)
+    ? source
+    : source && Array.isArray(source.apps)
+      ? source.apps
+      : [];
+
+  return rawList.map(normalizeRegistryEntry).filter(Boolean);
+}
+
+/**
+ * Case-insensitive fast search for a registered app entry by explicit slug
+ * or matching repository name.
  *
  * @param {string} slug
+ * @param {Array} [entries]
  * @returns {Object|null}
  */
-export function findAppEntry(slug) {
+export function findAppEntry(slug, entries) {
   if (!isValidSlug(slug)) {
     return null;
   }
   const clean = slug.trim().toLowerCase();
-  const list = getRegistry();
-  const found = list.find(
-    (item) => item && typeof item.slug === "string" && item.slug.toLowerCase() === clean
+  const list = Array.isArray(entries) ? entries : getRegistry();
+
+  const exactSlugMatch = list.find((item) => item?.slug && item.slug.toLowerCase() === clean);
+  if (exactSlugMatch) return exactSlugMatch;
+
+  const repoNameMatch = list.find(
+    (item) => !item?.slug && item?.repoName && item.repoName.toLowerCase() === clean
   );
-  return found || null;
+  return repoNameMatch || null;
 }
 
 /**
@@ -172,7 +400,133 @@ export async function fetchRepoFile(repo, branch, filePath, env, ctx, { ttl = 30
 }
 
 /**
- * Validates a parsed app.config.json object against required schema invariants.
+ * Fetches a remote installer script from a trusted HTTPS URL with Edge Caching.
+ *
+ * @param {string} remoteUrl
+ * @param {Object} env
+ * @param {Object} ctx
+ * @param {Object} [options]
+ * @returns {Promise<{ ok: boolean, text?: string, status: number, error?: string, cached?: boolean }>}
+ */
+export async function fetchTrustedRemoteScript(remoteUrl, env, ctx, { ttl = 300 } = {}) {
+  if (!isTrustedInstallerUrl(remoteUrl, env)) {
+    return {
+      ok: false,
+      status: 403,
+      error: `Untrusted or invalid remote installer URL: '${remoteUrl}'`
+    };
+  }
+
+  const cacheKey = new Request(
+    `https://apps.vib.tools/__cache/script/${encodeURIComponent(remoteUrl)}`
+  );
+
+  let cache = null;
+  try {
+    if (typeof caches !== "undefined" && caches?.default) {
+      cache = caches.default;
+    }
+  } catch (_) {
+    cache = null;
+  }
+
+  if (cache) {
+    try {
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        const text = await cached.text();
+        return { ok: true, text, status: 200, cached: true };
+      }
+    } catch (_) {}
+  }
+
+  let res;
+  try {
+    res = await fetch(remoteUrl, {
+      headers: { "User-Agent": "vib-apps-hub" }
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      status: 502,
+      error: `Network error fetching remote installer: ${err?.message || "Unknown error"}`
+    };
+  }
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status,
+      error: `Remote installer endpoint returned status ${res.status}`
+    };
+  }
+
+  const text = await res.text();
+
+  if (cache) {
+    try {
+      const responseToCache = new Response(text, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": `public, max-age=${ttl}`
+        }
+      });
+      const putPromise = cache.put(cacheKey, responseToCache);
+      if (ctx && typeof ctx.waitUntil === "function") {
+        ctx.waitUntil(putPromise);
+      } else {
+        await putPromise;
+      }
+    } catch (_) {}
+  }
+
+  return { ok: true, text, status: 200 };
+}
+
+function validateInstallerSpec(spec, label, isStrictV1) {
+  if (spec === undefined) return { ok: true };
+
+  if (typeof spec === "string") {
+    if (!spec.trim()) {
+      return { ok: false, status: 422, error: `${label} must be a non-empty string` };
+    }
+    return { ok: true };
+  }
+
+  if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
+    return { ok: false, status: 422, error: `${label} must be a string or installer object` };
+  }
+
+  if (isStrictV1) {
+    for (const key of Object.keys(spec)) {
+      if (key !== "type" && key !== "script") {
+        return { ok: false, status: 422, error: `Unknown property '${key}' in ${label}` };
+      }
+    }
+  }
+
+  if (typeof spec.script !== "string" || !spec.script.trim()) {
+    return { ok: false, status: 422, error: `${label}.script must be a non-empty string` };
+  }
+
+  if (spec.type !== undefined) {
+    if (typeof spec.type !== "string" || (isStrictV1 && !ALLOWED_INSTALLER_TYPES.has(spec.type))) {
+      return {
+        ok: false,
+        status: 422,
+        error: `${label}.type must be one of: powershell, bash, sh, cmd`
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Validates a parsed app.config.json object against the frozen vibtools-app.schema.json (v1)
+ * invariants. When schemaVersion === 1 is declared, strict frozen schema rules
+ * (additionalProperties: false, HTTPS URLs, ISO dates, 64-hex SHA256) are enforced.
  *
  * @param {any} config
  * @returns {{ ok: boolean, status?: number, error?: string }}
@@ -180,6 +534,27 @@ export async function fetchRepoFile(repo, branch, filePath, env, ctx, { ttl = 30
 export function validateAppConfig(config) {
   if (!config || typeof config !== "object" || Array.isArray(config)) {
     return { ok: false, status: 422, error: "app.config.json root must be a plain object" };
+  }
+
+  if (config.schemaVersion !== undefined && config.schemaVersion !== 1) {
+    return {
+      ok: false,
+      status: 422,
+      error: `Unsupported schemaVersion '${config.schemaVersion}'. Frozen Vib Apps schema requires schemaVersion: 1`
+    };
+  }
+
+  const isStrictV1 = config.schemaVersion === 1;
+
+  if (isStrictV1) {
+    const unknownRootKeys = Object.keys(config).filter((k) => !FROZEN_ROOT_KEYS.has(k));
+    if (unknownRootKeys.length > 0) {
+      return {
+        ok: false,
+        status: 422,
+        error: `Unknown properties in frozen v1 app.config.json: ${unknownRootKeys.join(", ")}`
+      };
+    }
   }
 
   const required = ["slug", "name", "latest", "versions"];
@@ -195,6 +570,7 @@ export function validateAppConfig(config) {
   if (
     typeof config.slug !== "string" ||
     !config.slug.trim() ||
+    !isValidSlug(config.slug) ||
     typeof config.name !== "string" ||
     !config.name.trim() ||
     typeof config.latest !== "string" ||
@@ -203,8 +579,53 @@ export function validateAppConfig(config) {
     return {
       ok: false,
       status: 422,
-      error: "Fields slug, name, and latest in app.config.json must be non-empty strings"
+      error: "Fields slug, name, and latest in app.config.json must be valid non-empty strings"
     };
+  }
+
+  if (config.access !== undefined && isStrictV1 && !ALLOWED_ACCESS.has(config.access)) {
+    return {
+      ok: false,
+      status: 422,
+      error: "Field access in app.config.json must be 'Free' or 'Paid'"
+    };
+  }
+
+  if (config.icon !== undefined && isStrictV1) {
+    if (typeof config.icon !== "string" || !config.icon.startsWith("https://")) {
+      return {
+        ok: false,
+        status: 422,
+        error: "Field icon in app.config.json must be an https:// URL"
+      };
+    }
+  }
+
+  const rootInstCheck = validateInstallerSpec(config.installer, "installer", isStrictV1);
+  if (!rootInstCheck.ok) return rootInstCheck;
+
+  if (config.docs !== undefined) {
+    if (!config.docs || typeof config.docs !== "object" || Array.isArray(config.docs)) {
+      return { ok: false, status: 422, error: "Field docs in app.config.json must be an object" };
+    }
+    if (isStrictV1) {
+      for (const docKey of Object.keys(config.docs)) {
+        if (docKey !== "features" && docKey !== "changelog") {
+          return {
+            ok: false,
+            status: 422,
+            error: `Unknown property '${docKey}' in docs (allowed: features, changelog)`
+          };
+        }
+        if (typeof config.docs[docKey] !== "string" || !config.docs[docKey].trim()) {
+          return {
+            ok: false,
+            status: 422,
+            error: `docs.${docKey} must be a non-empty string`
+          };
+        }
+      }
+    }
   }
 
   if (
@@ -218,6 +639,82 @@ export function validateAppConfig(config) {
       status: 422,
       error: "Field versions in app.config.json must be a non-empty object map"
     };
+  }
+
+  for (const [verKey, verObj] of Object.entries(config.versions)) {
+    if (!VERSION_KEY_RE.test(verKey)) {
+      return {
+        ok: false,
+        status: 422,
+        error: `Invalid version key '${verKey}' in app.config.json`
+      };
+    }
+
+    if (!verObj || typeof verObj !== "object" || Array.isArray(verObj)) {
+      return {
+        ok: false,
+        status: 422,
+        error: `Version entry '${verKey}' must be a plain object`
+      };
+    }
+
+    if (isStrictV1) {
+      const unknownVerKeys = Object.keys(verObj).filter((k) => !FROZEN_VERSION_KEYS.has(k));
+      if (unknownVerKeys.length > 0) {
+        return {
+          ok: false,
+          status: 422,
+          error: `Unknown properties in versions.${verKey}: ${unknownVerKeys.join(", ")}`
+        };
+      }
+
+      if (typeof verObj.url !== "string" || !verObj.url.startsWith("https://")) {
+        return {
+          ok: false,
+          status: 422,
+          error: `versions.${verKey}.url is required and must start with https://`
+        };
+      }
+
+      if (verObj.sha256 !== undefined && (typeof verObj.sha256 !== "string" || !SHA256_RE.test(verObj.sha256))) {
+        return {
+          ok: false,
+          status: 422,
+          error: `versions.${verKey}.sha256 must be a 64-character hexadecimal string`
+        };
+      }
+
+      if (verObj.released_at !== undefined && (typeof verObj.released_at !== "string" || !ISO_DATE_RE.test(verObj.released_at))) {
+        return {
+          ok: false,
+          status: 422,
+          error: `versions.${verKey}.released_at must follow strict YYYY-MM-DD format`
+        };
+      }
+    }
+
+    if (verObj.channel !== undefined && !ALLOWED_CHANNELS.has(verObj.channel)) {
+      return {
+        ok: false,
+        status: 422,
+        error: `versions.${verKey}.channel must be one of: stable, beta, alpha`
+      };
+    }
+
+    if (verObj.deprecated !== undefined && typeof verObj.deprecated !== "boolean") {
+      return {
+        ok: false,
+        status: 422,
+        error: `versions.${verKey}.deprecated must be a boolean`
+      };
+    }
+
+    const verInstCheck = validateInstallerSpec(
+      verObj.installer,
+      `versions.${verKey}.installer`,
+      isStrictV1
+    );
+    if (!verInstCheck.ok) return verInstCheck;
   }
 
   const latestNorm = config.latest.trim().toLowerCase().replace(/^v/, "");
@@ -237,8 +734,9 @@ export function validateAppConfig(config) {
 
 /**
  * Fetches and validates the .vibtools/apps/app.config.json file for an app entry.
+ * Falls back to legacy .vibtools/app.config.json on 404.
  *
- * @param {Object} entry - Entry from registry.json
+ * @param {Object} entry - Normalized entry from getRegistry()
  * @param {Object} env - Worker environment
  * @param {Object} ctx - Worker context
  * @returns {Promise<{ ok: boolean, config?: Object, status?: number, error?: string }>}
@@ -300,91 +798,195 @@ export async function fetchAppConfig(entry, env, ctx) {
 }
 
 /**
- * Fetches the raw PowerShell installer script for an app entry.
+ * Resolves a registered application by slug, supporting both explicit registry slugs
+ * and zero-config GitHub repo URL entries (auto-discovering slug from app.config.json).
  *
- * @param {Object} entry - Entry from registry.json
+ * @param {string} slug
+ * @param {Object} env
+ * @param {Object} ctx
+ * @param {Object} [options]
+ * @param {Array} [options.entries] - Optional pre-normalized registry entries (for testing)
+ * @param {Function} [options.configFetcher] - Optional fetcher override (for testing)
+ * @returns {Promise<{ entry: Object, config: Object } | null>}
+ */
+export async function resolveAppBySlug(slug, env, ctx, options = {}) {
+  if (!isValidSlug(slug)) return null;
+
+  const clean = slug.trim().toLowerCase();
+  const entries = Array.isArray(options.entries) ? options.entries : getRegistry();
+  const loadConfig = typeof options.configFetcher === "function" ? options.configFetcher : fetchAppConfig;
+
+  const triedRepos = new Set();
+
+  // 1. Fast path: explicit slug match or matching repo name
+  const directCandidate = findAppEntry(clean, entries);
+  if (directCandidate) {
+    triedRepos.add(directCandidate.repo);
+    const cfgRes = await loadConfig(directCandidate, env, ctx);
+    if (cfgRes?.ok && cfgRes.config) {
+      if (
+        directCandidate.slug ||
+        cfgRes.config.slug.trim().toLowerCase() === clean
+      ) {
+        return { entry: directCandidate, config: cfgRes.config };
+      }
+    }
+  }
+
+  // 2. Auto-discovery scan for URL-only registry entries whose repo name differs from app slug
+  const remainingCandidates = entries.filter(
+    (item) => !triedRepos.has(item.repo) && (!item.slug || item.slug.toLowerCase() === clean)
+  );
+
+  if (remainingCandidates.length === 0) {
+    return null;
+  }
+
+  const settled = await Promise.allSettled(
+    remainingCandidates.map((item) => loadConfig(item, env, ctx))
+  );
+
+  for (let i = 0; i < settled.length; i += 1) {
+    const res = settled[i];
+    if (
+      res.status === "fulfilled" &&
+      res.value?.ok &&
+      res.value.config &&
+      res.value.config.slug.trim().toLowerCase() === clean
+    ) {
+      return {
+        entry: remainingCandidates[i],
+        config: res.value.config
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extracts a script path or HTTPS URL from an installer spec (string or { type, script }).
+ *
+ * @param {string|Object|undefined|null} spec
+ * @returns {string|null}
+ */
+export function extractInstallerTarget(spec) {
+  if (typeof spec === "string" && spec.trim()) {
+    return spec.trim();
+  }
+  if (spec && typeof spec === "object" && typeof spec.script === "string" && spec.script.trim()) {
+    return spec.script.trim();
+  }
+  return null;
+}
+
+/**
+ * Fetches the raw PowerShell installer script for an app entry and target version.
+ * Priority:
+ * 1. versionData.installer (per-version override: repo path or trusted HTTPS URL)
+ * 2. config.installer (root default: repo path or trusted HTTPS URL)
+ * 3. Default repo paths: .vibtools/apps/installer.ps1 -> .vibtools/installer.ps1 -> .vibtools/install.ps1
+ *
+ * @param {Object} entry - Normalized entry from getRegistry()
  * @param {Object} config - Parsed app.config.json
  * @param {Object} env - Worker environment
  * @param {Object} ctx - Worker context
+ * @param {Object|null} [versionData=null] - Resolved version object from config.versions
  * @returns {Promise<{ ok: boolean, script?: string, status?: number, error?: string }>}
  */
-export async function fetchAppInstaller(entry, config, env, ctx) {
+export async function fetchAppInstaller(entry, config, env, ctx, versionData = null) {
   if (!entry || typeof entry.repo !== "string") {
     return { ok: false, status: 400, error: "Invalid app entry" };
   }
 
-  let installerPath = ".vibtools/installer.ps1";
-  if (config && typeof config.installer === "string" && config.installer.trim()) {
-    installerPath = config.installer.trim();
-  } else if (config && config.installer && typeof config.installer === "object" && config.installer.script) {
-    installerPath = config.installer.script.trim();
+  const explicitTarget =
+    extractInstallerTarget(versionData?.installer) ||
+    extractInstallerTarget(config?.installer);
+
+  // Remote HTTPS/HTTP URL installer (e.g. https://dl.vib.tools/.../install.ps1)
+  if (explicitTarget && /^https?:\/\//i.test(explicitTarget)) {
+    const remoteRes = await fetchTrustedRemoteScript(explicitTarget, env, ctx);
+    if (!remoteRes.ok) {
+      return { ok: false, status: remoteRes.status, error: remoteRes.error };
+    }
+    return { ok: true, script: remoteRes.text };
   }
 
-  // Normalize path to .vibtools/ if no directory is specified
-  if (!installerPath.startsWith(".vibtools/") && !installerPath.includes("/")) {
-    installerPath = `.vibtools/${installerPath}`;
-  }
+  const branch = entry.branch || "main";
+  const candidatePaths = [];
 
-  let res = await fetchRepoFile(
-    entry.repo,
-    entry.branch || "main",
-    installerPath,
-    env,
-    ctx
-  );
-
-  // Fallback to install.ps1 if default installer.ps1 was not found
-  if (!res.ok && res.status === 404 && installerPath === ".vibtools/installer.ps1") {
-    const fallbackRes = await fetchRepoFile(
-      entry.repo,
-      entry.branch || "main",
-      ".vibtools/install.ps1",
-      env,
-      ctx
+  if (explicitTarget) {
+    if (!explicitTarget.includes("/")) {
+      // Bare filename (e.g. "installer.ps1"): check .vibtools/apps/ first, then .vibtools/
+      candidatePaths.push(`.vibtools/apps/${explicitTarget}`, `.vibtools/${explicitTarget}`);
+    } else {
+      candidatePaths.push(explicitTarget);
+    }
+  } else {
+    candidatePaths.push(
+      ".vibtools/apps/installer.ps1",
+      ".vibtools/installer.ps1",
+      ".vibtools/install.ps1"
     );
-    if (fallbackRes.ok) {
-      res = fallbackRes;
+  }
+
+  let lastRes = { ok: false, status: 404, error: "Installer script not found" };
+  for (const candidatePath of candidatePaths) {
+    const res = await fetchRepoFile(entry.repo, branch, candidatePath, env, ctx);
+    if (res.ok) {
+      return { ok: true, script: res.text };
+    }
+    lastRes = res;
+    if (res.status !== 404) {
+      break;
     }
   }
 
-  if (!res.ok) {
-    return { ok: false, status: res.status, error: res.error };
-  }
-
-  return { ok: true, script: res.text };
+  return { ok: false, status: lastRes.status, error: lastRes.error };
 }
 
 /**
  * Fetches a documentation file (e.g., features.md, changelog.md) for an app entry.
+ * Bare filenames resolve inside .vibtools/apps/ first, falling back to .vibtools/.
  * Returns raw text content if found, or null on any error or missing path.
  *
- * @param {Object} entry - Entry from registry.json
- * @param {string} docPath - Relative path to the markdown file
+ * @param {Object} entry - Normalized entry from getRegistry()
+ * @param {string|undefined|null} docPath - Relative path to the markdown file
  * @param {Object} env - Worker environment
  * @param {Object} ctx - Worker context
+ * @param {string|null} [defaultFilename=null] - Fallback filename when docPath is omitted
  * @returns {Promise<string|null>}
  */
-export async function fetchAppDoc(entry, docPath, env, ctx) {
-  if (!entry || typeof entry.repo !== "string" || typeof docPath !== "string" || !docPath.trim()) {
+export async function fetchAppDoc(entry, docPath, env, ctx, defaultFilename = null) {
+  if (!entry || typeof entry.repo !== "string") {
     return null;
   }
 
-  let cleanDocPath = docPath.trim();
-  if (!cleanDocPath.startsWith(".vibtools/") && !cleanDocPath.includes("/")) {
-    cleanDocPath = `.vibtools/${cleanDocPath}`;
-  }
+  const rawTarget =
+    typeof docPath === "string" && docPath.trim()
+      ? docPath.trim()
+      : typeof defaultFilename === "string" && defaultFilename.trim()
+        ? defaultFilename.trim()
+        : "";
 
-  const res = await fetchRepoFile(
-    entry.repo,
-    entry.branch || "main",
-    cleanDocPath,
-    env,
-    ctx
-  );
-
-  if (!res.ok) {
+  if (!rawTarget) {
     return null;
   }
 
-  return res.text;
+  const branch = entry.branch || "main";
+  const candidatePaths = !rawTarget.includes("/")
+    ? [`.vibtools/apps/${rawTarget}`, `.vibtools/${rawTarget}`]
+    : [rawTarget];
+
+  for (const candidatePath of candidatePaths) {
+    const res = await fetchRepoFile(entry.repo, branch, candidatePath, env, ctx);
+    if (res.ok) {
+      return res.text;
+    }
+    if (res.status !== 404) {
+      return null;
+    }
+  }
+
+  return null;
 }

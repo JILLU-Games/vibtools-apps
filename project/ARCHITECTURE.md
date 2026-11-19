@@ -82,24 +82,31 @@ apps.vib.tools/
 
 ---
 
-## 4. Per-App `.vibtools/` Standard Structure
+## 4. Per-App `.vibtools/` Standard Structure (Frozen v1 Schema)
 
-Every application repository connected via `registry.json` must maintain a `.vibtools/` root directory adhering to this structure:
+Every application repository connected via `registry.json` (by pasting its GitHub repository URL or object entry) maintains a `.vibtools/apps/` directory adhering to `https://apps.vib.tools/schemas/vibtools-app.schema.json` (`schemaVersion: 1`):
 
 ```text
 <app-repository-root>/
 └── .vibtools/
-    ├── apps/
-    │   └── app.config.json        # Primary application manifest
-    ├── installer.ps1              # Standard PowerShell installation script
-    ├── features.md                # Detailed markdown summary of features
-    └── changelog.md               # Version-by-version release history
+    └── apps/
+        ├── app.config.json        # Frozen v1 application manifest (fallback: .vibtools/app.config.json)
+        ├── installer.ps1          # Default PowerShell installer (or trusted HTTPS URL; per-version override supported)
+        ├── features.md            # Detailed markdown summary of features
+        └── changelog.md           # Version-by-version release history
 ```
+
+Public machine-readable specifications served by `apps.vib.tools`:
+- `https://apps.vib.tools/schemas/vibtools-app.schema.json` (Frozen JSON Schema Draft 2020-12)
+- `https://apps.vib.tools/vib-apps-engine/llms.txt` (AI agent & developer quick spec)
+- `https://apps.vib.tools/vib-apps-engine/vibtools-app-config.md` (Full onboarding & 10-point checklist)
 
 ### Complete Example: `calgrid` (`.vibtools/apps/app.config.json`)
 
 ```json
 {
+  "$schema": "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+  "schemaVersion": 1,
   "slug": "calgrid",
   "name": "CalGrid",
   "tagline": "Minimalist desktop calendar widget and event scheduler",
@@ -109,24 +116,25 @@ Every application repository connected via `registry.json` must maintain a `.vib
   "latest": "v1.0.3",
   "installer": {
     "type": "powershell",
-    "script": "installer.ps1"
+    "script": ".vibtools/apps/installer.ps1"
   },
   "docs": {
-    "features": "features.md",
-    "changelog": "changelog.md"
+    "features": ".vibtools/apps/features.md",
+    "changelog": ".vibtools/apps/changelog.md"
   },
   "versions": {
     "v1.0.3": {
-      "releaseDate": "2026-11-15",
       "url": "https://dl.vib.tools/calgrid/v1.0.3/CalGrid-Setup-1.0.3.exe",
       "size": "42.8 MB",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "released_at": "2026-11-15"
     },
     "v1.0.2": {
-      "releaseDate": "2026-10-20",
       "url": "https://dl.vib.tools/calgrid/v1.0.2/CalGrid-Setup-1.0.2.exe",
+      "installer": "https://dl.vib.tools/calgrid/v1.0.2/install.ps1",
       "size": "41.5 MB",
-      "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a"
+      "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+      "released_at": "2026-10-20"
     }
   }
 }

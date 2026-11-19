@@ -300,6 +300,8 @@ function renderDetail(container, app, docs) {
       opt.value = ver;
       const parts = [formatVersionLabel(ver)];
       if (ver === app.latest) parts.push("(latest)");
+      if (verInfo?.channel && verInfo.channel !== "stable") parts.push(`[${verInfo.channel}]`);
+      if (verInfo?.deprecated) parts.push("(deprecated)");
       if (dateStr) parts.push(`— ${dateStr}`);
       opt.textContent = parts.join(" ");
       if (ver === selectedVersion) {

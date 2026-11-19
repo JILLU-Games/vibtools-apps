@@ -1,64 +1,87 @@
-# Application Configuration & `.vibtools/` Repository Standard
+# Application Configuration & `.vibtools/` Repository Standard (Frozen v1)
 
-> **Document Status:** Verified Against Live Code (`functions/_lib/github.js`, `functions/[[path]].js`, `public/components/sections/AppDetailView.js`)  
-> **Applies To:** All application repositories registered in `vib-apps-hub` (`registry.json`)  
-> **Related:** [Developer Onboarding Guide](./dev/03-app-onboarding.md)
+> **Frozen JSON Schema:** `https://apps.vib.tools/schemas/vibtools-app.schema.json`  
+> **AI & Developer Spec:** `https://apps.vib.tools/vib-apps-engine/llms.txt`  
+> **Verified Against Live Code:** `functions/_lib/github.js`, `functions/[[path]].js`, `functions/api/apps.js`, `public/components/sections/AppDetailView.js`  
+> **Applies To:** All application repositories registered in `vib-apps-hub` (`registry.json`)
 
 ---
 
-## 1. Repository Directory Layout
+## 1. Zero-Touch Onboarding (`registry.json`)
 
-Every target application repository (public or private) registered in `registry.json` stores its metadata, installer script, and documentation inside `.vibtools/`:
+To connect any GitHub repository (public or private) to `apps.vib.tools` and `get.vib.tools`, simply add its GitHub repository URL to `registry.json`:
+
+```json
+[
+  "https://github.com/vib-tools/calgrid",
+  "https://github.com/vib-tools/devprompt"
+]
+```
+
+*(Optional object form when overriding branch or featured flag: `{ "repo": "https://github.com/vib-tools/calgrid", "branch": "main", "featured": true }`.)*
+
+The edge hub automatically parses `owner/repo`, loads `.vibtools/apps/app.config.json`, discovers the app `slug`, renders Markdown documentation tabs, and routes every version's download URL and installer script.
+
+---
+
+## 2. Repository Directory Layout
 
 ```text
 <app-repository-root>/
 └── .vibtools/
-    ├── apps/
-    │   └── app.config.json        # Primary manifest (404 fallback: .vibtools/app.config.json)
-    ├── installer.ps1              # Default PowerShell installer (404 fallback: .vibtools/install.ps1)
-    ├── features.md                # Features & Overview Markdown (referenced by docs.features)
-    └── changelog.md               # Release Changelog Markdown (referenced by docs.changelog)
+    └── apps/
+        ├── app.config.json        # Frozen v1 manifest (404 fallback: .vibtools/app.config.json)
+        ├── installer.ps1          # Default PowerShell installer (404 fallback: .vibtools/installer.ps1 -> install.ps1)
+        ├── features.md            # Features & Overview Markdown (auto-loaded or referenced via docs.features)
+        └── changelog.md           # Release Changelog Markdown (auto-loaded or referenced via docs.changelog)
 ```
 
 ---
 
-## 2. Field-by-Field Specification for `app.config.json`
+## 3. Frozen Schema Field Specification (`schemaVersion: 1`)
 
-`fetchAppConfig()` (`functions/_lib/github.js:229`) strictly requires **4 top-level fields** (`slug`, `name`, `latest`, `versions`). All remaining fields are optional and rendered conditionally by the storefront only when provided.
+When `"schemaVersion": 1` is declared, both `public/schemas/vibtools-app.schema.json` and `validateAppConfig()` enforce `additionalProperties: false` on root and version objects so typos (e.g. `releaseDate` instead of `released_at`) are rejected immediately.
 
-| Field | Type | Strictly Required | Description | Example |
+| Field | Type | Required | Description | Example |
 | :--- | :--- | :---: | :--- | :--- |
-| `slug` | `string` | **Yes** | Unique identifier matching `/^[a-z0-9][a-z0-9-_]{0,63}$/i`. Used in `/app/<slug>` and `get.vib.tools/<slug>`. | `"calgrid"` |
+| `$schema` | `string` | Recommended | Canonical schema URI for IDE autocomplete & validation. | `"https://apps.vib.tools/schemas/vibtools-app.schema.json"` |
+| `schemaVersion` | `1` | Recommended | Frozen schema version integer (`1`). | `1` |
+| `slug` | `string` | **Yes** | Unique identifier matching `/^[a-z0-9][a-z0-9-_]{0,63}$/i`. | `"calgrid"` |
 | `name` | `string` | **Yes** | Human-readable application display name. | `"CalGrid"` |
-| `latest` | `string` | **Yes** | Version key in `versions` representing the default release. | `"v1.0.3"` |
-| `versions` | `object` | **Yes** | Map of version keys to release objects (see table below). | *See Version Object* |
-| `tagline` | `string` | No | Concise summary displayed on catalog cards (clamped to 2 lines) and detail header. | `"Minimalist desktop calendar widget and event scheduler"` |
-| `icon` | `string` | No | Direct HTTPS URL to an icon image (falls back to 2-letter monogram if omitted or unreachable). | `"https://dl.vib.tools/calgrid/icon.png"` |
-| `category` | `string` | No | Category label used for dynamic sidebar counts and `/category/<name>` filtering. | `"Productivity"` |
-| `access` | `string` | No | License tier (`"Free"` or `"Paid"`), surfaced as badges and the segmented license filter. | `"Free"` |
-| `installer` | `string \| object` | No | Script path string or `{ "type": "powershell", "script": ".vibtools/installer.ps1" }`. Defaults to `.vibtools/installer.ps1`. | `{"type": "powershell", "script": ".vibtools/installer.ps1"}` |
-| `docs` | `object` | No | Relative paths to Markdown docs (`features`, `changelog`). Filenames without `/` automatically resolve under `.vibtools/`. | `{"features": "features.md", "changelog": "changelog.md"}` |
-| `platforms` | `string[]` | No | Optional OS labels rendered as an informational **Operating System** selector on `/app/<slug>`. | `["Windows 10/11"]` |
-| `architectures` | `string[]` | No | Optional CPU labels rendered as an informational **Architecture** selector on `/app/<slug>`. | `["x64"]` |
-| `screenshots` | `(string \| { url, alt? })[]` | No | Optional screenshot gallery displayed on `/app/<slug>`. | `["https://dl.vib.tools/calgrid/screen-1.png"]` |
-| `requirements` | `string[] \| object` | No | Optional system requirements list displayed on `/app/<slug>`. | `["Windows 10/11 (64-bit)"]` |
-| `links` | `object` | No | Optional `https?://` external resource links displayed in the detail sidebar. | `{"docs": "https://docs.vib.tools/calgrid"}` |
+| `latest` | `string` | **Yes** | Default release version key matching a key in `versions`. | `"v1.0.3"` |
+| `versions` | `object` | **Yes** | Non-empty map of version keys to release objects. | *See Version Object* |
+| `tagline` | `string` | No | Concise one-line summary (max 160 chars). | `"Minimalist desktop calendar widget"` |
+| `icon` | `string` | No | Direct `https://` URL to icon image (monogram fallback if omitted). | `"https://dl.vib.tools/calgrid/icon.png"` |
+| `category` | `string` | No | Category label for sidebar filtering and `/category/<name>`. | `"Productivity"` |
+| `access` | `"Free" \| "Paid"` | No | License tier badge and catalog filter. | `"Free"` |
+| `installer` | `string \| object` | No | Default installer path (`.vibtools/apps/installer.ps1`), trusted `https://` script URL, or `{ "type": "powershell", "script": "..." }`. | `{"type": "powershell", "script": ".vibtools/apps/installer.ps1"}` |
+| `docs` | `object` | No | Relative paths to Markdown docs (`features`, `changelog`). Bare filenames resolve in `.vibtools/apps/` first, then `.vibtools/`. | `{"features": ".vibtools/apps/features.md", "changelog": ".vibtools/apps/changelog.md"}` |
+| `platforms` | `string[]` | No | Supported operating systems shown as read-only metadata. | `["Windows 10/11"]` |
+| `architectures` | `string[]` | No | Supported CPU architectures shown as read-only metadata. | `["x64"]` |
+| `screenshots` | `(string \| { url, alt? })[]` | No | Optional HTTPS screenshot gallery. | `["https://dl.vib.tools/calgrid/screen-1.png"]` |
+| `requirements` | `string[] \| object` | No | Optional system requirements list or key-value map. | `["Windows 10/11 (64-bit)"]` |
+| `links` | `object` | No | Optional external `https://` links (`docs`, `homepage`, `source`). | `{"docs": "https://docs.vib.tools/calgrid"}` |
 
 ### Version Object Fields (`versions.<versionKey>`)
 
-| Field | Type | Required for `/dl/` | Description | Example |
+| Field | Type | Required | Description | Example |
 | :--- | :--- | :---: | :--- | :--- |
-| `url` | `string` | **Yes** | Direct `https://` download URL (validated with `startsWith("https://")` in `functions/[[path]].js:214`). | `"https://dl.vib.tools/calgrid/v1.0.3/CalGrid-Setup-1.0.3.exe"` |
+| `url` | `string` | **Yes** | Direct `https://` download URL on a trusted host (`dl.vib.tools`, `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com`, or `ALLOWED_DOWNLOAD_HOSTS`). | `"https://dl.vib.tools/calgrid/v1.0.3/CalGrid-Setup-1.0.3.exe"` |
+| `installer` | `string \| object` | No | Optional **per-version installer override** (repo path or trusted `https://` script URL including `raw.githubusercontent.com`). Inherits root `installer` when omitted. | `"https://dl.vib.tools/calgrid/v1.0.2/install.ps1"` |
 | `size` | `string` | No | Human-readable binary size string. | `"42.8 MB"` |
-| `sha256` | `string` | No | 64-character hexadecimal SHA256 digest displayed with **Full/Hide** toggle and copy button. | `"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"` |
-| `released_at` | `string` | No | ISO 8601 date (`YYYY-MM-DD`) formatted deterministically in UTC (e.g. `Nov 15, 2026`). | `"2026-11-15"` |
+| `sha256` | `string` | No | Exact 64-character hexadecimal SHA256 digest. | `"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"` |
+| `released_at` | `string` | No | Strict ISO UTC date (`YYYY-MM-DD`). | `"2026-11-15"` |
+| `channel` | `"stable" \| "beta" \| "alpha"` | No | Optional stability channel indicator shown in the version selector. | `"stable"` |
+| `deprecated` | `boolean` | No | Optional deprecation marker shown in the version selector. | `false` |
 
 ---
 
-## 3. Complete Example: `.vibtools/apps/app.config.json`
+## 4. Complete Frozen v1 Example: `.vibtools/apps/app.config.json`
 
 ```json
 {
+  "$schema": "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+  "schemaVersion": 1,
   "slug": "calgrid",
   "name": "CalGrid",
   "tagline": "Minimalist desktop calendar widget and event scheduler",
@@ -68,12 +91,14 @@ Every target application repository (public or private) registered in `registry.
   "latest": "v1.0.3",
   "installer": {
     "type": "powershell",
-    "script": ".vibtools/installer.ps1"
+    "script": ".vibtools/apps/installer.ps1"
   },
   "docs": {
-    "features": "features.md",
-    "changelog": "changelog.md"
+    "features": ".vibtools/apps/features.md",
+    "changelog": ".vibtools/apps/changelog.md"
   },
+  "platforms": ["Windows 10/11"],
+  "architectures": ["x64"],
   "versions": {
     "v1.0.3": {
       "url": "https://dl.vib.tools/calgrid/v1.0.3/CalGrid-Setup-1.0.3.exe",
@@ -83,6 +108,7 @@ Every target application repository (public or private) registered in `registry.
     },
     "v1.0.2": {
       "url": "https://dl.vib.tools/calgrid/v1.0.2/CalGrid-Setup-1.0.2.exe",
+      "installer": "https://dl.vib.tools/calgrid/v1.0.2/install.ps1",
       "size": "41.5 MB",
       "sha256": "9f83c605d4c82c3dd9e3b909c29fca53ca74c70284c717ec010746ff79c57c4c",
       "released_at": "2026-10-28"
@@ -93,43 +119,12 @@ Every target application repository (public or private) registered in `registry.
 
 ---
 
-## 4. PowerShell Installer Contract: `.vibtools/installer.ps1`
+## 5. PowerShell Installer Contract
 
-When a client runs `irm "https://get.vib.tools/<slug>" | iex` or `irm "https://get.vib.tools/<slug>/<version>" | iex`, `functions/[[path]].js:292` resolves the concrete target version (defaulting to `config.latest`, never the literal `"latest"`) and prepends **exactly two** sanitized PowerShell variables:
+When a client runs `irm "https://get.vib.tools/<slug>" | iex` or `irm "https://get.vib.tools/<slug>/<version>" | iex`, `functions/[[path]].js` resolves the target version, picks `versions[version].installer` (or root `installer`), and prepends three sanitized PowerShell variables:
 
 ```powershell
 $APP_SLUG = "calgrid"
 $APP_VERSION = "v1.0.3"
-```
-
-Write `.vibtools/installer.ps1` using `$APP_SLUG` and `$APP_VERSION` (do not assume `$APP_NAME` or `$DOWNLOAD_URL` are injected):
-
-```powershell
-# .vibtools/installer.ps1
-$ErrorActionPreference = "Stop"
-
-$AppName = "CalGrid"
-$TargetSlug = if ([string]::IsNullOrWhiteSpace($APP_SLUG)) { "calgrid" } else { $APP_SLUG }
-$TargetVersion = if ([string]::IsNullOrWhiteSpace($APP_VERSION)) { "v1.0.3" } else { $APP_VERSION }
-
-$DownloadUrl = "https://get.vib.tools/dl/$TargetSlug/$TargetVersion"
-$TempPath = Join-Path $env:TEMP "$AppName-$TargetVersion-Setup.exe"
-
-Write-Host "==> Downloading $AppName ($TargetVersion)..." -ForegroundColor Cyan
-try {
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempPath
-    Write-Host "==> Launching installer..." -ForegroundColor Green
-    Start-Process -FilePath $TempPath -Wait
-}
-catch {
-    Write-Error "Failed to install $AppName : $_"
-    exit 1
-}
-finally {
-    if (Test-Path $TempPath) {
-        Remove-Item -Path $TempPath -Force -ErrorAction SilentlyContinue
-    }
-}
-
-Write-Host "==> $AppName ($TargetVersion) installation completed." -ForegroundColor Green
+$APP_NAME = "CalGrid"
 ```

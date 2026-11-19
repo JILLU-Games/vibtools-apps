@@ -7,6 +7,8 @@
 
 export const MOCK_APPS = [
   {
+    $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+    schemaVersion: 1,
     slug: "calgrid",
     name: "CalGrid",
     tagline: "Minimalist desktop calendar widget and event scheduler",
@@ -17,11 +19,11 @@ export const MOCK_APPS = [
     latest: "v1.0.3",
     installer: {
       type: "powershell",
-      script: ".vibtools/installer.ps1"
+      script: ".vibtools/apps/installer.ps1"
     },
     docs: {
-      features: "features.md",
-      changelog: "changelog.md"
+      features: ".vibtools/apps/features.md",
+      changelog: ".vibtools/apps/changelog.md"
     },
     versions: {
       "v1.0.3": {
@@ -93,6 +95,8 @@ CalGrid is a minimalist desktop calendar widget designed for developers and powe
     }
   },
   {
+    $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+    schemaVersion: 1,
     slug: "devprompt",
     name: "DevPrompt",
     tagline: "Developer prompt workbench and token optimization studio",
@@ -103,11 +107,11 @@ CalGrid is a minimalist desktop calendar widget designed for developers and powe
     latest: "v2.1.0",
     installer: {
       type: "powershell",
-      script: ".vibtools/installer.ps1"
+      script: ".vibtools/apps/installer.ps1"
     },
     docs: {
-      features: "features.md",
-      changelog: "changelog.md"
+      features: ".vibtools/apps/features.md",
+      changelog: ".vibtools/apps/changelog.md"
     },
     versions: {
       "v2.1.0": {
@@ -164,6 +168,8 @@ DevPrompt is a native desktop prompt engineer workbench for crafting, debugging,
     }
   },
   {
+    $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+    schemaVersion: 1,
     slug: "vibclip",
     name: "VibClip",
     tagline: "Lightning-fast clipboard manager with instant search and snippet expansion",
@@ -174,11 +180,11 @@ DevPrompt is a native desktop prompt engineer workbench for crafting, debugging,
     latest: "v1.4.0",
     installer: {
       type: "powershell",
-      script: ".vibtools/installer.ps1"
+      script: ".vibtools/apps/installer.ps1"
     },
     docs: {
-      features: "features.md",
-      changelog: "changelog.md"
+      features: ".vibtools/apps/features.md",
+      changelog: ".vibtools/apps/changelog.md"
     },
     versions: {
       "v1.4.0": {

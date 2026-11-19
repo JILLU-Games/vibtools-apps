@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+  "title": "Vib Apps Engine Configuration (app.config.json)",
+  "description": "Frozen v1 schema for .vibtools/apps/app.config.json powering apps.vib.tools and get.vib.tools.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["slug", "name", "latest", "versions"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Canonical JSON Schema URI: https://apps.vib.tools/schemas/vibtools-app.schema.json"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Frozen schema format version (must be 1)."
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-_]{0,63}$",
+      "description": "Unique lowercase URL slug used on apps.vib.tools/app/<slug> and get.vib.tools/<slug>."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "Human-readable display name of the application."
+    },
+    "tagline": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "description": "Concise one-line description shown on catalog cards and the app detail header."
+    },
+    "category": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "Marketplace category label (e.g. Productivity, Developer Tools, Utilities)."
+    },
+    "access": {
+      "type": "string",
+      "enum": ["Free", "Paid"],
+      "description": "Access or license tier badge."
+    },
+    "icon": {
+      "type": "string",
+      "pattern": "^https://.+",
+      "description": "Direct HTTPS URL to the application icon image (PNG/SVG/WebP)."
+    },
+    "latest": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "pattern": "^[vV]?[0-9A-Za-z][0-9A-Za-z._+-]{0,47}$",
+      "description": "Default release version key. Must match an existing key inside versions."
+    },
+    "installer": {
+      "$ref": "#/$defs/installerSpec",
+      "description": "Default installer script for all versions unless overridden per version."
+    },
+    "docs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Repository-relative paths to Markdown documentation tabs rendered on apps.vib.tools.",
+      "properties": {
+        "features": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path to overview/features Markdown (defaults to .vibtools/apps/features.md)."
+        },
+        "changelog": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path to release changelog Markdown (defaults to .vibtools/apps/changelog.md)."
+        }
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 48
+      },
+      "uniqueItems": true,
+      "description": "Supported operating systems displayed in the app metadata panel."
+    },
+    "architectures": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 24
+      },
+      "uniqueItems": true,
+      "description": "Supported CPU architectures (e.g. x64, arm64)."
+    },
+    "requirements": {
+      "description": "Optional system requirements list or key-value map.",
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "screenshots": {
+      "type": "array",
+      "description": "Optional HTTPS screenshot URLs or objects with alt text.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "pattern": "^https://.+"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+              "url": {
+                "type": "string",
+                "pattern": "^https://.+"
+              },
+              "alt": {
+                "type": "string",
+                "maxLength": 160
+              }
+            }
+          }
+        ]
+      }
+    },
+    "links": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^https://.+"
+      },
+      "description": "Optional external HTTPS resource links (e.g. docs, homepage, source, license)."
+    },
+    "versions": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Map of version identifiers (e.g. v1.0.3) to release artifacts and optional per-version installers.",
+      "patternProperties": {
+        "^[vV]?[0-9A-Za-z][0-9A-Za-z._+-]{0,47}$": {
+          "$ref": "#/$defs/versionRelease"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "installerSpec": {
+      "description": "Repo-relative script path (e.g. .vibtools/apps/installer.ps1), trusted HTTPS script URL, or typed installer object.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["script"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["powershell", "bash", "sh", "cmd"],
+              "default": "powershell",
+              "description": "Shell runtime label for the installer."
+            },
+            "script": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Repo-relative path to the script (e.g. .vibtools/apps/installer.ps1) or trusted HTTPS URL."
+            }
+          }
+        }
+      ]
+    },
+    "versionRelease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https://.+",
+          "description": "Direct HTTPS binary download URL on a trusted host (dl.vib.tools, github.com, or configured allowlist)."
+        },
+        "installer": {
+          "$ref": "#/$defs/installerSpec",
+          "description": "Optional per-version installer override (repo path or trusted HTTPS URL). Inherits root installer when omitted."
+        },
+        "size": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Human-readable package size (e.g. 42.8 MB)."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$",
+          "description": "64-character hexadecimal SHA256 checksum for integrity verification."
+        },
+        "released_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "UTC release date in strict ISO YYYY-MM-DD format."
+        },
+        "channel": {
+          "type": "string",
+          "enum": ["stable", "beta", "alpha"],
+          "default": "stable",
+          "description": "Release stability channel."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "default": false,
+          "description": "Marks an older release as deprecated in version selectors."
+        }
+      }
+    }
+  }
+}

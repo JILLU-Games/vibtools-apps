@@ -1,8 +1,8 @@
 import {
   isValidSlug,
-  findAppEntry,
-  fetchAppConfig,
-  fetchAppInstaller
+  resolveAppBySlug,
+  fetchAppInstaller,
+  isTrustedDownloadUrl
 } from "./_lib/github.js";
 import {
   findMockApp,
@@ -10,45 +10,10 @@ import {
   isMockFallbackEnabled
 } from "./_lib/mockData.js";
 
-const DEFAULT_TRUSTED_DOWNLOAD_HOSTS = [
-  "dl.vib.tools",
-  "github.com",
-  "objects.githubusercontent.com",
-  "release-assets.githubusercontent.com"
-];
+export { isTrustedDownloadUrl };
 
 const STATIC_ASSET_EXT_RE =
-  /\.(css|js|mjs|cjs|json|webmanifest|svg|png|jpe?g|gif|webp|ico|txt|xml|pdf|woff2?|ttf|eot|map|wasm)$/i;
-
-/**
- * Validates that a download target URL is a syntactically valid HTTPS URL
- * pointing strictly to an allowlisted binary storage host (prevents open redirects).
- *
- * @param {string} rawUrl
- * @param {Object} [env]
- * @returns {boolean}
- */
-export function isTrustedDownloadUrl(rawUrl, env) {
-  if (typeof rawUrl !== "string" || !rawUrl.trim()) return false;
-
-  let parsed;
-  try {
-    parsed = new URL(rawUrl);
-  } catch (_) {
-    return false;
-  }
-
-  if (parsed.protocol !== "https:") return false;
-  if (parsed.username || parsed.password) return false;
-
-  const extraHosts = String(env?.ALLOWED_DOWNLOAD_HOSTS ?? "")
-    .split(",")
-    .map((h) => h.trim().toLowerCase())
-    .filter(Boolean);
-
-  const allowedHosts = new Set([...DEFAULT_TRUSTED_DOWNLOAD_HOSTS, ...extraHosts]);
-  return allowedHosts.has(parsed.hostname.toLowerCase());
-}
+  /\.(css|js|mjs|cjs|json|webmanifest|svg|png|jpe?g|gif|webp|ico|txt|xml|pdf|woff2?|ttf|eot|map|wasm|md)$/i;
 
 /**
  * Resolves a version object from config.versions supporting both 'v'-prefixed
@@ -139,6 +104,22 @@ export async function onRequestGet(context) {
           });
         }
       }
+    }
+
+    // Attach public CORS headers for machine-readable schema & AI spec endpoints
+    if (
+      res.status === 200 &&
+      (url.pathname.startsWith("/schemas/") || url.pathname.startsWith("/vib-apps-engine/"))
+    ) {
+      const publicHeaders = new Headers(res.headers);
+      publicHeaders.set("Access-Control-Allow-Origin", "*");
+      if (url.pathname.endsWith(".schema.json")) {
+        publicHeaders.set("Content-Type", "application/schema+json; charset=utf-8");
+      }
+      return new Response(res.body, {
+        status: res.status,
+        headers: publicHeaders
+      });
     }
 
     return res;
@@ -242,12 +223,9 @@ export async function onRequestGet(context) {
 
     const allowMock = isMockFallbackEnabled(request, env);
     let config = null;
-    const entry = findAppEntry(slug);
-    if (entry) {
-      const cfgRes = await fetchAppConfig(entry, env, context);
-      if (cfgRes.ok) {
-        config = cfgRes.config;
-      }
+    const resolvedApp = await resolveAppBySlug(slug, env, context);
+    if (resolvedApp) {
+      config = resolvedApp.config;
     }
 
     // Fallback to sample app ONLY when mock fallback is permitted
@@ -308,22 +286,17 @@ export async function onRequestGet(context) {
     }
 
     const allowMock = isMockFallbackEnabled(request, env);
+    let entry = null;
     let config = null;
     let installerScript = null;
     let canonicalSlug = slug;
     let scriptSource = "live";
-    const entry = findAppEntry(slug);
 
-    if (entry) {
-      canonicalSlug = entry.slug;
-      const cfgRes = await fetchAppConfig(entry, env, context);
-      if (cfgRes.ok) {
-        config = cfgRes.config;
-        const instRes = await fetchAppInstaller(entry, config, env, context);
-        if (instRes.ok) {
-          installerScript = instRes.script;
-        }
-      }
+    const resolvedApp = await resolveAppBySlug(slug, env, context);
+    if (resolvedApp) {
+      entry = resolvedApp.entry;
+      config = resolvedApp.config;
+      canonicalSlug = config.slug || entry.slug || slug;
     }
 
     // Fallback to sample app ONLY when mock fallback is permitted
@@ -344,17 +317,31 @@ export async function onRequestGet(context) {
       });
     }
 
-    let targetVersion = config.latest;
-
-    if (requestedVersion) {
-      const resolved = resolveVersion(config.versions, requestedVersion, config.latest);
-      if (!resolved) {
-        return new Response(`Version '${requestedVersion}' not found for app '${slug}'.\n`, {
+    // Resolve target version (latest or explicit) BEFORE loading installer so per-version overrides apply
+    const resolvedVer = resolveVersion(config.versions, requestedVersion, config.latest);
+    if (!resolvedVer) {
+      return new Response(
+        `Version '${requestedVersion || config.latest}' not found for app '${slug}'.\n`,
+        {
           status: 404,
+          headers: { "Content-Type": "text/plain; charset=utf-8" }
+        }
+      );
+    }
+
+    const targetVersion = resolvedVer.versionKey;
+    const versionData = resolvedVer.versionData;
+
+    if (scriptSource === "live" && entry) {
+      const instRes = await fetchAppInstaller(entry, config, env, context, versionData);
+      if (instRes.ok) {
+        installerScript = instRes.script;
+      } else if (instRes.status === 403) {
+        return new Response(`Untrusted or invalid installer URL configured for app '${slug}'.\n`, {
+          status: 403,
           headers: { "Content-Type": "text/plain; charset=utf-8" }
         });
       }
-      targetVersion = resolved.versionKey;
     }
 
     if (!installerScript) {
