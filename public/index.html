@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vib Apps — Apps Catalog &amp; Edge Installer</title>
+
+  <!-- PWA & Touch Icons -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/vib.tools.Branding/favicon.svg" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="96x96" href="/vib.tools.Branding/favicon-96x96.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+  <!-- OpenGraph & Social Metadata -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Vib Apps — Apps Catalog &amp; Edge Installer">
+  <meta property="og:description" content="Central App Store, PowerShell Installers, and Direct Downloads for Vib Tools applications.">
+  <meta property="og:image" content="/vib.tools.Branding/og-default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Vib Apps — Apps Catalog &amp; Edge Installer">
+  <meta name="twitter:description" content="Central App Store, PowerShell Installers, and Direct Downloads for Vib Tools applications.">
+  <meta name="twitter:image" content="/vib.tools.Branding/og-default.png">
+
+  <!-- Core Stylesheet (Tokens + Globals) -->
+  <link rel="stylesheet" href="/styles/globals.css">
+
+  <!-- Third-party Markdown & Sanitization (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- Main ES Module Application Script -->
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

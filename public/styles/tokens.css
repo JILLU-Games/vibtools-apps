@@ -1,0 +1,130 @@
+/**
+ * Design Tokens — Single Source of Truth for apps.vib.tools & get.vib.tools
+ * Defines typography, geometry, spacing, and dual-theme (dark/light) color palettes.
+ */
+
+:root {
+  /* =========================================================================
+     Typography (Segoe UI ONLY - strictly enforced)
+     ========================================================================= */
+  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, "JetBrains Mono", monospace;
+
+  /* Font Sizes */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 15px;
+  --text-lg: 18px;
+
+  /* Font Weights (Smooth, soft, clean - never 700/800) */
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /* =========================================================================
+     Spacing Tokens
+     ========================================================================= */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+
+  /* =========================================================================
+     Border Radiuses (Strictly 4px buttons/badges/inputs, 6px cards/modals)
+     ========================================================================= */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+
+  /* =========================================================================
+     Component & Layout Geometry
+     ========================================================================= */
+  --header-h: 48px;
+  --sidebar-w: 220px;
+  --mobile-nav-h: 56px;
+  --z-header: 40;
+  --z-sidebar: 50;
+  --z-modal: 100;
+  --z-toast: 150;
+}
+
+/* =========================================================================
+   Dark Theme (Default)
+   ========================================================================= */
+:root,
+[data-theme="dark"] {
+  --bg-page: #0d1117;
+  --bg-surface: #161b22;
+  --bg-hover: #21262d;
+  --bg-subtle: #1f242c;
+
+  --border-color: #30363d;
+  --border-strong: #484f58;
+  --border-muted: #21262d;
+
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+
+  --accent: #1d6cf6;
+  --accent-hover: #1a5ecc;
+  --accent-soft: rgba(29, 108, 246, 0.15);
+  --accent-text: #ffffff;
+
+  --status-success: #238636;
+  --status-success-soft: rgba(35, 134, 54, 0.18);
+  --status-error: #da3633;
+  --status-error-soft: rgba(218, 54, 51, 0.18);
+  --status-warn: #d29922;
+  --status-warn-soft: rgba(210, 153, 34, 0.18);
+
+  --badge-free-bg: #238636;
+  --badge-paid-bg: #8957e5;
+  --modal-backdrop: rgba(0, 0, 0, 0.72);
+
+  /* Semantic Aliases */
+  --bg-canvas: var(--bg-page);
+  --border-default: var(--border-color);
+  --accent-primary: var(--accent);
+}
+
+/* =========================================================================
+   Light Theme
+   ========================================================================= */
+[data-theme="light"] {
+  --bg-page: #f6f8fa;
+  --bg-surface: #ffffff;
+  --bg-hover: #f3f4f6;
+  --bg-subtle: #eaeef2;
+
+  --border-color: #d0d7de;
+  --border-strong: #afb8c1;
+  --border-muted: #e1e4e8;
+
+  --text-primary: #1f2328;
+  --text-secondary: #656d76;
+  --text-muted: #8c959f;
+
+  --accent: #0969da;
+  --accent-hover: #0854b0;
+  --accent-soft: rgba(9, 105, 218, 0.12);
+  --accent-text: #ffffff;
+
+  --status-success: #1a7f37;
+  --status-success-soft: rgba(26, 127, 55, 0.15);
+  --status-error: #cf222e;
+  --status-error-soft: rgba(207, 34, 46, 0.15);
+  --status-warn: #9a6700;
+  --status-warn-soft: rgba(154, 103, 0, 0.15);
+
+  --badge-free-bg: #1a7f37;
+  --badge-paid-bg: #8250df;
+  --modal-backdrop: rgba(31, 35, 40, 0.55);
+
+  /* Semantic Aliases */
+  --bg-canvas: var(--bg-page);
+  --border-default: var(--border-color);
+  --accent-primary: var(--accent);
+}

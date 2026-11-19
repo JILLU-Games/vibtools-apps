@@ -1,0 +1,3 @@
+name = "vib-apps-hub"
+pages_build_output_dir = "public"
+compatibility_date = "2026-09-04"
