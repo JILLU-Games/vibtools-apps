@@ -1,39 +1,56 @@
-# Project Documentation & User Guides (`docs/`)
+# Project Documentation (`docs/`)
 
-> **Notice:** This directory is tracked in Git and serves as the definitive, authentic, and complete user and consumer guide for `apps.vib.tools`.
-
----
-
-## 🎯 Purpose & Objectives (উদ্দেশ্য ও নিয়মাবলী)
-
-এই ফোল্ডারে প্রজেক্টের ব্যবহারকারী (End-Users), ডেভেলপার এবং কন্ট্রিবিউটরদের জন্য A-Z পূর্ণাঙ্গ ইউজার গাইডলাইন ও ডকুমেন্টস থাকবে।
-
-### Core Principles (মূল নীতিমালা):
-1. **100% Real & Exact Details (প্রকৃত ও নির্ভুল তথ্য):**
-   - এখানে কোনো অনুমানভিত্তিক (assumed), কাল্পনিক বা ভুল তথ্য লেখা যাবে না। প্রতিটি তথ্য হতে হবে কোড ও বাস্তব অ্যাপ্লিকেশনের সাথে শতভাগ সঙ্গতিপূর্ণ।
-2. **Comprehensive Coverage (কোনো তথ্য বাদ যাবে না):**
-   - প্রজেক্টের প্রতিটি ফিচার কেন, কীভাবে, কোথায়, কখন কাজ করে এবং কীভাবে ব্যবহার করতে হবে তার A-Z গাইডলাইন থাকতে হবে।
-3. **Exhaustive User Manual (ব্যবহারকারী সহায়িকা):**
-   - অ্যাপ্লিকেশনটি কীভাবে ব্যবহার করতে হবে, কোন পেজের কাজ কী, কোন বাটন ক্লিক করলে কী ঘটবে—তার বিস্তারিত হ্যান্ডবুক এখানে থাকবে।
+> **Notice:** This directory is tracked in Git and serves as the authoritative, source-verified documentation suite for `vib-apps-hub` (`apps.vib.tools` & `get.vib.tools`). Start at [`docs/index.md`](./index.md).
 
 ---
 
-## 📁 Directory Structure (ফোল্ডার গঠন)
+## Core Principles
+
+1. **100% Source-Verified Details:** Every route, UI control, configuration field, header, and error message is verified directly against the working codebase with zero speculation.
+2. **Dual-Portal Vib Docs Engine Routing:** `.vibtools/docs.config.json` routes `docs/users/` to `docs.vib.tools` and `docs/dev/` to `developer.vibtools.io`. Each portal directory is self-contained with valid YAML frontmatter and internal relative links.
+3. **Transparent Audit Findings:** Implemented, partially implemented, and unused modules are explicitly distinguished in [`coverage-and-verification-report.md`](./coverage-and-verification-report.md).
+
+---
+
+## Directory Structure
 
 ```text
 docs/
-├── README.md              # এই ডিরেক্টরির ভূমিকা ও ডকুমেন্টের নিয়মাবলী
-├── MANIFEST.md            # ডিরেক্টরির ফাইল ও সাব-ফোল্ডার ইনডেক্স
-├── MINIFEST.md            # ম্যানিফেস্ট রেফারেন্স ফাইল
-├── app-config-schema.md   # অ্যাপ কনফিগারেশন স্কিমা ডকুমেন্টেশন
-├── user-guide/            # সাধারণ ব্যবহারকারীদের জন্য পেজ ও বাটন ব্যবহারের গাইডলাইন
-├── features/              # প্রতিটি ফিচারের এ টু জেড ব্যবহার প্রণালী
-└── api/                   # পাবলিক এপিআই ও এন্ডপয়েন্ট কনজিউমার গাইড
+├── index.md                                # Top-level documentation homepage
+├── MANIFEST.md                             # Complete file & subfolder registry
+├── README.md                               # Directory purpose & maintenance rules
+├── coverage-and-verification-report.md     # Forensic audit matrix & verified findings
+├── app-config-schema.md                    # Reconciled .vibtools/ app config standard
+├── deployment.md                           # Reconciled Cloudflare Pages & R2 deployment guide
+├── users/                                  # Vib Docs Engine target: docs.vib.tools
+│   ├── index.md
+│   ├── 01-getting-started.md
+│   ├── 02-browsing-and-filtering.md
+│   ├── 03-cli-installer.md
+│   ├── 04-downloads-and-verification.md
+│   ├── 05-workflows.md
+│   └── 06-troubleshooting-and-faq.md
+├── dev/                                    # Vib Docs Engine target: developer.vibtools.io
+│   ├── index.md
+│   ├── 01-architecture.md
+│   ├── 02-codebase-structure.md
+│   ├── 03-app-onboarding.md
+│   ├── 04-api-and-edge-routing.md
+│   ├── 05-security-and-validation.md
+│   ├── 06-local-setup-and-deployment.md
+│   └── 07-testing-and-contributing.md
+└── reference/                              # Cross-cutting technical references
+    ├── index.md
+    ├── configuration-reference.md
+    ├── design-tokens-and-components.md
+    ├── dependencies.md
+    └── glossary.md
 ```
 
 ---
 
-## 📋 Strict Rules for Agents (এজেন্টদের জন্য নির্দেশিকা)
+## Maintenance Rules
 
-- কোনো নতুন ফিচার বা পেজ তৈরি করা হলে অথবা বাটন বা ইউআই ইন্টারঅ্যাকশনে পরিবর্তন আনলে সাথে সাথে `docs/` এ ইউজার গাইড যুক্ত বা আপডেট করতে হবে।
-- প্রতিটি ফাইলের এন্ট্রি `docs/MANIFEST.md` এ সঠিকভাবে তালিকাভুক্ত রাখতে হবে।
+- Keep every file inside `docs/users/` and `docs/dev/` compliant with `.vibtools/docs.config.json` (valid YAML frontmatter, unquoted boolean `draft: false`, unique normalized slugs, and relative links staying strictly inside their respective target `docsPath`).
+- Update `docs/MANIFEST.md` whenever files are added, renamed, or deleted inside `docs/`.
+- Never add typo manifest files (such as `MINIFEST.md`) inside `docs/`.

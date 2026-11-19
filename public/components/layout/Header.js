@@ -8,9 +8,10 @@ import { navigate } from "../../lib/router.js";
  *
  * @param {Object} options
  * @param {Function} [options.onSearch] - Live search callback receiving search query
+ * @param {string} [options.initialQuery=""] - Initial query string (e.g. from ?q=)
  * @returns {HTMLElement}
  */
-export function Header({ onSearch } = {}) {
+export function Header({ onSearch, initialQuery = "" } = {}) {
   const header = document.createElement("header");
   header.className = "app-header";
 
@@ -25,15 +26,16 @@ export function Header({ onSearch } = {}) {
 
   const logoImg = document.createElement("img");
   logoImg.src = "/vib.tools.Branding/favicon.svg";
-  logoImg.alt = "Vib Tools";
-  logoImg.width = 22;
-  logoImg.height = 22;
+  logoImg.alt = "";
+  logoImg.width = 24;
+  logoImg.height = 24;
   logoImg.className = "app-header__logo-img";
   logoImg.onerror = () => {
-    logoImg.replaceWith(Icon("layers", 18));
+    logoImg.replaceWith(Icon("layers", 20));
   };
 
   const logoText = document.createElement("span");
+  logoText.className = "app-header__logo-text";
   logoText.textContent = "Vib Apps";
 
   logo.appendChild(logoImg);
@@ -44,14 +46,16 @@ export function Header({ onSearch } = {}) {
   });
   inner.appendChild(logo);
 
-  // Center: Search Input
+  // Center: Search Input with '/' keyboard cue
   const searchWrap = document.createElement("div");
   searchWrap.className = "app-header__search";
 
   const searchInput = Input({
-    placeholder: "Search apps... (Press / to focus)",
+    placeholder: "Search applications...",
+    value: initialQuery,
     icon: "search",
-    ariaLabel: "Search apps",
+    ariaLabel: "Search applications",
+    className: "app-header__search-field",
     onInput: (val) => {
       if (typeof onSearch === "function") {
         onSearch(val);
@@ -59,14 +63,22 @@ export function Header({ onSearch } = {}) {
     }
   });
 
+  const shortcutHint = document.createElement("kbd");
+  shortcutHint.className = "app-header__shortcut";
+  shortcutHint.textContent = "/";
+  shortcutHint.setAttribute("aria-hidden", "true");
+  searchInput.appendChild(shortcutHint);
+
   // Global '/' keyboard shortcut to focus search input (guarded against open modals)
   window.addEventListener("keydown", (e) => {
     const hasOpenModal = !!document.querySelector(".ui-modal, .ui-modal-backdrop");
+    const activeTag = document.activeElement?.tagName;
     if (
       e.key === "/" &&
       !hasOpenModal &&
-      document.activeElement.tagName !== "INPUT" &&
-      document.activeElement.tagName !== "TEXTAREA"
+      activeTag !== "INPUT" &&
+      activeTag !== "TEXTAREA" &&
+      activeTag !== "SELECT"
     ) {
       e.preventDefault();
       const inputEl = searchInput.input || searchInput;
@@ -78,43 +90,44 @@ export function Header({ onSearch } = {}) {
   searchWrap.appendChild(searchInput);
   inner.appendChild(searchWrap);
 
-  // Right: Actions (Docs link + Theme Toggle)
+  // Right: Actions (Semantic Docs link + Theme Toggle)
   const actions = document.createElement("div");
   actions.className = "app-header__actions";
 
-  // Docs external button
-  const docsBtn = Button({
+  const docsLink = Button({
     label: "Docs",
-    icon: "external",
+    icon: "book",
     variant: "ghost",
-    size: "sm",
-    title: "Open docs.vib.tools",
-    onClick: () => {
-      window.open("https://docs.vib.tools", "_blank", "noopener,noreferrer");
-    }
+    size: "md",
+    href: "https://docs.vib.tools",
+    target: "_blank",
+    rel: "noopener noreferrer",
+    title: "Open Vib Tools Documentation",
+    className: "app-header__docs-btn"
   });
-  actions.appendChild(docsBtn);
+  actions.appendChild(docsLink);
 
-  // Theme toggle button
   let currentTheme = getTheme();
   const themeBtn = Button({
     icon: currentTheme === "dark" ? "sun" : "moon",
     variant: "ghost",
-    size: "sm",
+    size: "md",
     title: `Switch to ${currentTheme === "dark" ? "light" : "dark"} theme`,
-    ariaLabel: "Toggle theme",
+    ariaLabel: `Switch to ${currentTheme === "dark" ? "light" : "dark"} theme`,
+    className: "app-header__theme-btn",
     onClick: () => {
       const nextTheme = toggleTheme();
       toast.info(`Theme set to ${nextTheme}`);
     }
   });
 
-  // Sync icon on theme change
   window.addEventListener("themechange", (e) => {
     currentTheme = e.detail.theme;
     themeBtn.innerHTML = "";
-    themeBtn.appendChild(Icon(currentTheme === "dark" ? "sun" : "moon", 14));
-    themeBtn.title = `Switch to ${currentTheme === "dark" ? "light" : "dark"} theme`;
+    themeBtn.appendChild(Icon(currentTheme === "dark" ? "sun" : "moon", 16));
+    const nextLabel = `Switch to ${currentTheme === "dark" ? "light" : "dark"} theme`;
+    themeBtn.title = nextLabel;
+    themeBtn.setAttribute("aria-label", nextLabel);
   });
 
   actions.appendChild(themeBtn);
@@ -122,7 +135,7 @@ export function Header({ onSearch } = {}) {
 
   header.appendChild(inner);
 
-  // Expose search input element for resetting
+  // Expose search input element for syncing/resetting
   header.searchInput = searchInput.input || searchInput;
 
   return header;

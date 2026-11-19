@@ -1,14 +1,15 @@
 # Production Deployment & Operation Guide
 
 > **Target Systems:** Cloudflare Pages, Cloudflare Pages Functions, Cloudflare R2  
-> **Hostnames:** `apps.vib.tools` (Web Catalog SPA), `get.vib.tools` (CLI Quickstart & Streamer), `dl.vib.tools` (Binary Storage)  
-> **Status:** Production Ready
+> **Hostnames:** `apps.vib.tools` (Web Catalog SPA), `get.vib.tools` (Edge CLI & Download Router), `dl.vib.tools` (Binary Storage)  
+> **Status:** Verified Against Live Code (`wrangler.toml`, `functions/`, `server.js`, `registry.json`)  
+> **Related:** [Local Setup & Cloudflare Deployment](./dev/06-local-setup-and-deployment.md)
 
 ---
 
 ## 1. System Overview
 
-`vib-apps-hub` runs as a unified, zero-build Cloudflare Pages application backed by Pages Functions (Workers runtime). A single deployment serves both the visual web store and the command-line installation engine:
+`vib-apps-hub` runs as a unified, zero-build Cloudflare Pages application backed by Pages Functions (Workers runtime). A single deployment serves both the visual storefront and the edge installer router:
 
 ```text
                   ┌──────────────────────┐
@@ -18,18 +19,19 @@
             ┌────────────────┴────────────────┐
             ▼                                 ▼
    apps.vib.tools                      get.vib.tools
- (Web Catalog SPA)              (CLI Streamer & Downloads)
+  (Web Catalog SPA)             (CLI Streamer & Downloads)
         │                                     │
         ▼                                     ▼
-Static Assets (`public/`)           Pages Function (`[[path]].js`)
-  + API (`/api/apps`)                         │
-        │                                     ├── irm get.vib.tools -> CLI Manual
-        ▼                                     ├── irm get.vib.tools/<slug> -> install.ps1
-  GitHub API Cache                            └── get.vib.tools/dl/<slug> -> 302 to R2
-(Private Repos: `.vibtools/`)                         │
-                                                      ▼
-                                                dl.vib.tools
-                                           (Cloudflare R2 Storage)
+Static Assets (public/)             Pages Function ([[path]].js)
+  + API (/api/apps)                           │
+        │                                     ├── Browser HTML -> 302 to apps.vib.tools
+        ▼                                     ├── CLI /        -> Plain-text usage manual
+  GitHub Contents API                         ├── CLI /<slug>  -> .vibtools/installer.ps1
+  + caches.default (300s)                     └── /dl/<slug>   -> 302 to versions.<ver>.url
+  + mockData.js fallback                                              │
+                                                                      ▼
+                                                                dl.vib.tools
+                                                           (Cloudflare R2 Storage)
 ```
 
 ---
@@ -37,17 +39,18 @@ Static Assets (`public/`)           Pages Function (`[[path]].js`)
 ## 2. Cloudflare Pages Project Setup
 
 ### A. Create Project via Cloudflare Dashboard
-1. Log in to the [Cloudflare Dashboard](https://dash.cloudflare.com/) and navigate to **Workers & Pages** > **Create application** > **Pages** > **Connect to Git**.
-2. Select the `apps.vib.tools` repository (`vib-apps-hub`).
-3. Configure the **Build Settings**:
+1. Log in to the Cloudflare Dashboard and navigate to **Workers & Pages → Create application → Pages → Connect to Git**.
+2. Select the `vib-apps-hub` repository (`branch: main`).
+3. Configure zero-build **Build Settings** matching `wrangler.toml`:
    - **Framework preset:** `None`
-   - **Build command:** *(Leave empty / blank)*
+   - **Build command:** *(Leave blank)*
    - **Build output directory:** `public`
    - **Root directory:** `/`
 4. Click **Save and Deploy**.
 
-### B. Compatibility Date
-Ensure the project uses compatibility date `2026-09-04` (as specified in `wrangler.toml`). If deploying via Wrangler CLI:
+### B. Wrangler CLI Deployment
+Ensure compatibility date `2026-09-04` (locked in `wrangler.toml`):
+
 ```bash
 npx wrangler pages deploy public --project-name=vib-apps-hub --compatibility-date=2026-09-04
 ```
@@ -56,129 +59,93 @@ npx wrangler pages deploy public --project-name=vib-apps-hub --compatibility-dat
 
 ## 3. Environment Variables & Secrets
 
-The backend Pages Functions require a GitHub Personal Access Token to access `.vibtools/` metadata and `install.ps1` scripts from private repositories.
+`functions/_lib/github.js` optionally authenticates with the GitHub REST API using `env.GITHUB_TOKEN` (required for private repositories and for avoiding GitHub's 60 req/hr unauthenticated rate limit).
 
-### Required Secret: `GITHUB_TOKEN`
-- **Scope required:** `repo` (Full control of private repositories) or a fine-grained token with **Read access to metadata and contents** across your organization's app repositories.
+### Required Secret (for Private Repos): `GITHUB_TOKEN`
+- **Recommended Scope:** GitHub Fine-Grained Personal Access Token with **Contents: Read-only** across registered app repositories.
 
-### Setting the Secret:
-#### Method 1: Cloudflare Dashboard
-1. Go to your Pages project: **Settings** > **Environment variables**.
-2. Under **Production**, click **Add variable**.
-3. Variable name: `GITHUB_TOKEN`
-4. Value: `<your-github-pat>`
-5. Click **Encrypt** and **Save**.
+### Setting the Secret
+- **Cloudflare Dashboard:** Pages project → **Settings → Environment variables** → add `GITHUB_TOKEN` as an **Encrypted** variable for Production and Preview, then redeploy.
+- **Wrangler CLI:**
+  ```bash
+  npx wrangler pages secret put GITHUB_TOKEN --project-name=vib-apps-hub
+  ```
 
-#### Method 2: Wrangler CLI
-```bash
-npx wrangler pages secret put GITHUB_TOKEN --project-name=vib-apps-hub
-```
-
-> **Security Note:** `GITHUB_TOKEN` is strictly isolated within the server-side Cloudflare Pages Functions runtime (`functions/_lib/github.js`). It is never returned in client JSON responses, never exposed in client bundles, and never printed to browser logs.
+> **Security Note:** `GITHUB_TOKEN` is strictly isolated in `functions/_lib/github.js`. It is never returned in API JSON responses or bundled into `public/`.
 
 ---
 
-## 4. Custom Domain Configuration
+## 4. Dual Custom Domain Configuration
 
-A single Pages project handles both public hostnames via Cloudflare's edge DNS:
+Attach both hostnames to the **same** Cloudflare Pages project under **Custom domains**:
 
-1. In the Pages project dashboard, open the **Custom domains** tab.
-2. Click **Set up a custom domain** and add:
-   - `apps.vib.tools` (Primary web catalog UI)
-3. Click **Set up a custom domain** again and add:
-   - `get.vib.tools` (CLI installer & binary redirect domain)
-4. Cloudflare automatically provisions edge SSL/TLS certificates and configures DNS CNAME records for both domains.
+1. `apps.vib.tools` — Serves the static catalog UI (`public/`) and `/api/apps`.
+2. `get.vib.tools` — Intercepted by `functions/[[path]].js` to stream PowerShell installers and `302` direct binary redirects.
 
 ---
 
 ## 5. Cloudflare R2 Binary Storage (`dl.vib.tools`)
 
-All compiled desktop binaries (`.zip`, `.exe`, `.msi`, `.dmg`) are hosted on Cloudflare R2 to eliminate GitHub Release limits and bandwidth costs.
-
-### A. Create R2 Bucket
-1. Navigate to **R2** > **Create bucket**.
-2. Name: `vib-tools-binaries`.
-3. Connect a custom domain: `dl.vib.tools`.
-
-### B. Recommended Directory Structure in R2
-```text
-dl.vib.tools/
-├── <app-slug>/
-│   ├── <semver>/
-│   │   ├── <app-slug>-<version>-windows-x64.zip
-│   │   ├── <app-slug>-<version>-windows-x64.exe
-│   │   └── SHA256SUMS.txt
-│   └── latest/
-│       └── <app-slug>-latest-windows-x64.zip
-```
-
-### C. Download URL Mapping
-In `.vibtools/app.config.json`, configure the download links targeting this bucket:
-```json
-{
-  "downloads": {
-    "windows": {
-      "x64": "https://dl.vib.tools/my-app/1.2.0/my-app-1.2.0-windows-x64.zip"
-    }
-  }
-}
-```
-
-The edge router at `get.vib.tools/dl/<slug>` will automatically issue a `302 Found` redirect to this URL.
+1. Navigate to **R2 → Create bucket** (e.g. `vib-tools-binaries`) and attach custom domain `dl.vib.tools`.
+2. Organize artifacts consistently by slug and version:
+   ```text
+   dl.vib.tools/
+   └── <app-slug>/
+       ├── icon.png
+       └── <version>/
+           └── <installer-file>
+   ```
+3. Configure each release's direct `https://` download URL under `versions.<versionKey>.url` in `.vibtools/apps/app.config.json`:
+   ```json
+   {
+     "latest": "v1.2.0",
+     "versions": {
+       "v1.2.0": {
+         "url": "https://dl.vib.tools/my-app/v1.2.0/MyApp-Setup-1.2.0.exe",
+         "size": "24.6 MB",
+         "sha256": "<64-char-hex-sha256>",
+         "released_at": "2026-11-15"
+       }
+     }
+   }
+   ```
+   `get.vib.tools/dl/<slug>` and `get.vib.tools/dl/<slug>/<version>` validate that `url` starts with `https://` and return HTTP `302 Found` directly to that URL.
 
 ---
 
-## 6. Onboarding a New Application (Checklist)
+## 6. Onboarding a New Application (4-Step Checklist)
 
-To publish a new private or paid app on `apps.vib.tools` and `get.vib.tools`, complete these 4 steps:
-
-### Step 1: Prepare `.vibtools/` in App Repository
-Inside the application's GitHub repository (`vib-tools/<app-slug>`), create the `.vibtools/` folder:
-- **`app.config.json`**: App metadata, category, version, and download links. (See [`docs/app-config-schema.md`](./app-config-schema.md))
-- **`install.ps1`**: PowerShell installation script. Can use placeholders `$APP_SLUG`, `$APP_NAME`, `$APP_VERSION`, `$DOWNLOAD_URL`.
-- **`features.md`**: Markdown detailing features, hotkeys, and system requirements.
-- **`changelog.md`**: Markdown release notes per version.
-
-### Step 2: Upload Binaries to R2
-Upload the compiled binaries to `https://dl.vib.tools/<app-slug>/<version>/...`. Ensure the SHA256 hash in `app.config.json` matches the binary hash:
-```powershell
-Get-FileHash -Algorithm SHA256 ./my-app-1.0.0-windows-x64.zip
-```
-
-### Step 3: Register App in `registry.json`
-Add the app entry to `registry.json` in the root of `vib-apps-hub`:
-```json
-{
-  "slug": "my-app",
-  "name": "My App Name",
-  "category": "developer-tools",
-  "repo": "vib-tools/my-app",
-  "branch": "main",
-  "tier": "free",
-  "featured": true
-}
-```
-
-### Step 4: Deploy Updates
-Commit and push the changes to GitHub. Cloudflare Pages will automatically deploy the updated catalog:
-```bash
-git add registry.json
-git commit -m "feat(registry): onboard my-app"
-git push origin main
-```
-The edge cache automatically invalidates within 5 minutes (`s-maxage=300`), after which the app appears live on `apps.vib.tools` and is installable via:
-```powershell
-irm get.vib.tools/my-app | iex
-```
+1. **Prepare `.vibtools/` in the app repository:**
+   - `.vibtools/apps/app.config.json` — Manifest with required `slug`, `name`, `latest`, `versions` (see [`docs/app-config-schema.md`](./app-config-schema.md)).
+   - `.vibtools/installer.ps1` — PowerShell installer consuming `$APP_SLUG` and `$APP_VERSION`.
+   - `.vibtools/features.md` and `.vibtools/changelog.md` — Optional Markdown documentation.
+2. **Upload binaries to R2 (`dl.vib.tools`):**
+   Compute SHA256 before publishing:
+   ```powershell
+   Get-FileHash -Algorithm SHA256 .\MyApp-Setup-1.2.0.exe
+   ```
+3. **Register the repository in `registry.json`:**
+   ```json
+   {
+     "slug": "my-app",
+     "repo": "vib-tools/my-app",
+     "branch": "main",
+     "featured": true
+   }
+   ```
+4. **Deploy updates:** Push to `main`. Edge caches (`Cache-Control: public, max-age=300`) refresh automatically within 5 minutes, after which the app is live on `apps.vib.tools` and installable via:
+   ```powershell
+   irm "https://get.vib.tools/my-app" | iex
+   ```
 
 ---
 
 ## 7. Operational Troubleshooting
 
-| Symptom | Cause | Solution |
+| Symptom | Verified Cause | Resolution |
 | :--- | :--- | :--- |
-| Catalog returns `[]` empty list | Missing or invalid `GITHUB_TOKEN` | Verify `GITHUB_TOKEN` is set in Pages project settings with `repo` scope. |
-| `404 App '<slug>' not found` | Slug is not in `registry.json` or typo in URL | Check `registry.json` spelling. Slugs are case-insensitive. |
-| `502 Bad Gateway` on `/api/apps?slug=...` | GitHub API rate limit or `.vibtools/app.config.json` is missing | Check Pages function logs in Cloudflare Dashboard; verify `.vibtools/` directory exists in the target repository. |
-| SPA reload returns 404 | Missing SPA fallback handling | Verify `functions/[[path]].js` is active and serves `env.ASSETS.fetch("/index.html")` for 404 HTML routes. |
-| Direct download fails | Missing or malformed `downloads` URL | Ensure `downloads.windows.x64` in `app.config.json` points to an active R2 object on `dl.vib.tools`. |
+| Catalog shows only 3 sample apps (`CalGrid`, `DevPrompt`, `VibClip`) | Zero live repositories resolved (missing `GITHUB_TOKEN`, placeholder `example-app`, or missing `.vibtools/apps/app.config.json`), activating `functions/_lib/mockData.js` fallback. | Register real repositories in `registry.json`, confirm `.vibtools/apps/app.config.json`, and configure `GITHUB_TOKEN` for private repos. |
+| `404 Not Found` on `/api/apps?slug=<slug>` | Slug is absent from `registry.json` (and fallback catalog) or live repo fetch failed. | Verify `registry.json` entry and GitHub repository `.vibtools/apps/app.config.json`. |
+| `502` on `get.vib.tools/<slug>` | App config loaded, but `fetchAppInstaller()` could not fetch `.vibtools/installer.ps1` (or fallback `.vibtools/install.ps1`). | Verify the installer file exists in the target repo and check `GITHUB_TOKEN` permissions. |
+| SPA inner route reload returns `404` | `functions/[[path]].js` not deployed or bypassed. | Confirm `functions/[[path]].js` is active and serves `env.ASSETS.fetch("/index.html")` on extensionless non-`/api/` 404 routes. |
+| Direct download `/dl/<slug>` returns `404` | Version key missing in `versions` or `versions.<ver>.url` does not start with `https://`. | Verify `versions.<ver>.url` in `.vibtools/apps/app.config.json`. |

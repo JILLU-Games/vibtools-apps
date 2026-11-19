@@ -18,14 +18,19 @@ export function Card({
   footer,
   clickable = false,
   onClick,
+  ariaLabel,
   className = ""
 } = {}) {
-  const card = document.createElement("div");
+  const card = document.createElement("article");
   card.className = cn(
     "ui-card",
     clickable && "ui-card--clickable",
     className
   );
+
+  if (ariaLabel) {
+    card.setAttribute("aria-label", ariaLabel);
+  }
 
   if (header) {
     const headEl = document.createElement("div");
@@ -61,7 +66,18 @@ export function Card({
   }
 
   if (clickable && typeof onClick === "function") {
-    card.addEventListener("click", onClick);
+    card.tabIndex = 0;
+    card.addEventListener("click", (e) => {
+      if (e.target.closest("button, a, input, select, textarea")) return;
+      onClick(e);
+    });
+    card.addEventListener("keydown", (e) => {
+      if (e.target !== card) return;
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onClick(e);
+      }
+    });
   }
 
   return card;

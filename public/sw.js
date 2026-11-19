@@ -2,7 +2,7 @@
  * Service Worker for apps.vib.tools (PWA & Offline Shell).
  */
 
-const CACHE_NAME = "vib-apps-hub-v1";
+const CACHE_NAME = "vib-apps-hub-v2";
 
 const STATIC_ASSETS = [
   "/",
@@ -14,6 +14,8 @@ const STATIC_ASSETS = [
   "/lib/theme.js",
   "/lib/router.js",
   "/lib/api.js",
+  "/lib/appMeta.js",
+  "/lib/clipboard.js",
   "/components/ui/index.js",
   "/components/ui/Icon.js",
   "/components/ui/Button.js",

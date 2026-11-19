@@ -28,12 +28,23 @@ export function Footer() {
   inner.appendChild(left);
 
   const right = document.createElement("div");
-  const link = document.createElement("a");
-  link.href = "https://get.vib.tools";
-  link.textContent = "get.vib.tools";
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  right.appendChild(link);
+  right.className = "app-footer__links";
+
+  const footerLinks = [
+    { label: "vib.tools", href: "https://vib.tools" },
+    { label: "docs.vib.tools", href: "https://docs.vib.tools" },
+    { label: "get.vib.tools", href: "https://get.vib.tools" }
+  ];
+
+  footerLinks.forEach((item) => {
+    const link = document.createElement("a");
+    link.href = item.href;
+    link.textContent = item.label;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    right.appendChild(link);
+  });
+
   inner.appendChild(right);
 
   footer.appendChild(inner);

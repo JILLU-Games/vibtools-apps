@@ -2,20 +2,23 @@
 
 > **Active Project:** `vib-apps-hub`  
 > **Target Domains:** `apps.vib.tools` (App Catalog) & `get.vib.tools` (Edge CLI & Direct Download Router)  
-> **Last Updated:** 2026-11-19 (Pre-Implementation Architecture & Planning Locked)
+> **Last Updated:** 2026-11-19 (Vib Docs Engine Dual-Portal Configuration Completed)
 
 ---
 
 ## 1. Current Status
 
-- **Project Status:** Production Ready & Hardened (All 4 Phases Completed — 4/4)
+- **Project Status:** Production Ready & Hardened (All 4 Phases + UI/UX Marketplace Refinement + Vib Docs Engine Configuration Completed)
 - **Git Repository:** `https://github.com/JILLU-Games/vibtools-apps.git` (Pushed to branch `main`)
 - **Active / Next Phase:** Ready for Production Deployment to Cloudflare Pages
-- **Completed BugFix Phases:**
+- **Completed BugFix & Refinement Phases:**
   - Phase 1 (Mock/Demo Fallback Engine)
   - Phase 2 (Edge Routing, CORS & CLI Normalization)
   - Phase 3 (Frontend UI Parity & Mobile Experience)
   - Phase 4 (Caching Scalability, Dynamic Titles & PWA Polish)
+  - Node.js 22 Edge Emulator & Dev Server (`server.js` & `package.json` on Port 3000)
+  - Production Marketplace UI/UX Audit & Refinement (Zero-build 3-zone app cards, 2-column sticky detail layout, license/access filter, Discover/Categories/Resources sidebar with live counts, expandable SHA256, ARIA tabs, WCAG AA dual-theme contrast, mobile header/toast fixes, SW `vib-apps-hub-v2`)
+  - Vib Docs Engine Dual-Portal Configuration (`.vibtools/docs.config.json` conforming to frozen schema v1 with `"docsType": "both"`, `.vibtools/logo.png`, structured `docs/users/` & `docs/dev/` trees, stray `docs/MINIFEST.md` removed, 10/10 self-verification checklist passed)
 - **Execution Strategy:** 4-Phase Sequential Roadmap with Strict Scope Locks (100% Successfully Completed)
 
 ---

@@ -1,4 +1,4 @@
-import registry from "../../registry.json";
+import registry from "../../registry.json" with { type: "json" };
 
 /**
  * Validates a slug against safe alphanumeric & hyphen naming standards.

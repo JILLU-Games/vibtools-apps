@@ -1,6 +1,7 @@
 import { initTheme } from "./lib/theme.js";
 import { getCurrentRoute, onRouteChange, navigate } from "./lib/router.js";
 import { fetchAppsCatalog } from "./lib/api.js";
+import { computeCategoryCounts } from "./lib/appMeta.js";
 import { MainLayout } from "./components/layout/MainLayout.js";
 import { AppGrid } from "./components/sections/AppGrid.js";
 import { AppDetailView } from "./components/sections/AppDetailView.js";
@@ -21,16 +22,32 @@ async function bootstrap() {
     });
   }
 
-  // State
+  // Application State
   let loadedApps = [];
-  let currentSearchQuery = "";
+  let isLoadingCatalog = true;
+  const initialParams = new URLSearchParams(window.location.search);
+  let currentSearchQuery = initialParams.get("q") || "";
+  let activeAccessFilter = "all";
   let searchDebounceTimer = null;
   const initialRoute = getCurrentRoute();
+
+  // Sync URL query param (?q=...) without triggering a full navigation
+  function syncSearchQueryInUrl(query) {
+    const url = new URL(window.location.href);
+    const trimmed = (query || "").trim();
+    if (trimmed) {
+      url.searchParams.set("q", trimmed);
+    } else {
+      url.searchParams.delete("q");
+    }
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  }
 
   // 3. Mount Main Layout
   const layout = MainLayout({
     initialRoute,
     initialCategories: [],
+    initialQuery: currentSearchQuery,
     onSearch: (query) => {
       clearTimeout(searchDebounceTimer);
       searchDebounceTimer = setTimeout(() => {
@@ -39,6 +56,7 @@ async function bootstrap() {
         if (route.view !== "home" && route.view !== "category") {
           window.history.replaceState({}, "", "/");
         }
+        syncSearchQueryInUrl(currentSearchQuery);
         renderCurrentView(getCurrentRoute());
       }, 150);
     }
@@ -65,6 +83,19 @@ async function bootstrap() {
     }
   }
 
+  function resetAllFilters() {
+    currentSearchQuery = "";
+    activeAccessFilter = "all";
+    layout.resetSearch();
+    const route = getCurrentRoute();
+    if (route.view === "category") {
+      navigate("/");
+    } else {
+      syncSearchQueryInUrl("");
+      renderCurrentView(getCurrentRoute());
+    }
+  }
+
   // 5. View Renderer
   function renderCurrentView(route) {
     updateDocumentTitle(route);
@@ -77,7 +108,14 @@ async function bootstrap() {
         const grid = AppGrid({
           apps: loadedApps,
           route,
-          searchQuery: currentSearchQuery
+          searchQuery: currentSearchQuery,
+          activeAccess: activeAccessFilter,
+          isLoading: isLoadingCatalog,
+          onAccessChange: (nextAccess) => {
+            activeAccessFilter = nextAccess;
+            renderCurrentView(getCurrentRoute());
+          },
+          onResetFilters: resetAllFilters
         });
         layout.viewRoot.appendChild(grid);
         break;
@@ -105,37 +143,43 @@ async function bootstrap() {
     }
   }
 
-  // 5. Subscribe to Route Changes (Browser Back/Forward & navigate calls)
+  // 6. Subscribe to Route Changes (Browser Back/Forward & navigate calls)
   onRouteChange((newRoute) => {
-    // If navigating to /cli or /app/*, clear search input
     if (newRoute.view !== "home" && newRoute.view !== "category") {
       currentSearchQuery = "";
+      activeAccessFilter = "all";
       layout.resetSearch();
     }
     renderCurrentView(newRoute);
   });
 
-  // 6. Fetch Catalog
+  // Render initial loading state immediately so first paint is never empty
+  renderCurrentView(initialRoute);
+
+  // 7. Fetch Catalog
   try {
     const catalogData = await fetchAppsCatalog();
     loadedApps = catalogData.apps || [];
+    isLoadingCatalog = false;
 
-    // Extract unique categories
-    const categoriesSet = new Set();
-    loadedApps.forEach((app) => {
-      if (app.category && typeof app.category === "string") {
-        categoriesSet.add(app.category.trim());
-      }
-    });
-    const categories = Array.from(categoriesSet).sort();
-    layout.updateCategories(categories);
+    const { categories, counts, total } = computeCategoryCounts(loadedApps);
+    layout.updateCategories(categories, counts, total);
 
-    // Initial render after catalog is loaded
-    renderCurrentView(getCurrentRoute());
+    // Re-render home/category once catalog resolves; leave in-progress detail/cli views undisturbed
+    const activeRoute = getCurrentRoute();
+    if (activeRoute.view === "home" || activeRoute.view === "category") {
+      renderCurrentView(activeRoute);
+    } else {
+      updateDocumentTitle(activeRoute);
+    }
   } catch (err) {
     console.error("[Catalog Load Error]", err);
+    isLoadingCatalog = false;
     toast.error(err.message || "Failed to load apps catalog");
-    renderCurrentView(getCurrentRoute());
+    const activeRoute = getCurrentRoute();
+    if (activeRoute.view === "home" || activeRoute.view === "category") {
+      renderCurrentView(activeRoute);
+    }
   }
 }
 

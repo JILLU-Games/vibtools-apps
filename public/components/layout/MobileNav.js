@@ -76,12 +76,16 @@ export function MobileNav({ activeRoute = { view: "home" } } = {}) {
 
   function syncActive(route) {
     appsItem.classList.remove("is-active");
+    appsItem.removeAttribute("aria-current");
     cliItem.classList.remove("is-active");
+    cliItem.removeAttribute("aria-current");
 
     if (route.view === "home" || route.view === "category" || route.view === "app") {
       appsItem.classList.add("is-active");
+      appsItem.setAttribute("aria-current", "page");
     } else if (route.view === "cli") {
       cliItem.classList.add("is-active");
+      cliItem.setAttribute("aria-current", "page");
     }
   }
 

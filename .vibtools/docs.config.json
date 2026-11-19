@@ -1,0 +1,33 @@
+{
+  "$schema": "https://docs.vib.tools/schemas/vibtools-docs.schema.json",
+  "schemaVersion": 1,
+  "docsType": "both",
+  "slug": "vib-apps",
+  "title": "Vib Apps",
+  "version": "1.0.0",
+  "accentColor": "#1D6CF6",
+  "logoPath": ".vibtools/logo.png",
+  "branch": "main",
+  "targets": {
+    "users": {
+      "slug": "vib-apps",
+      "title": "Vib Apps",
+      "category": "Platform & Tools",
+      "description": "Browse Vib Tools applications, install software via PowerShell one-liners, and verify direct binary downloads.",
+      "accentColor": "#1D6CF6",
+      "docsPath": "docs/users",
+      "ctaLabel": "Open Vib Apps",
+      "ctaUrl": "https://apps.vib.tools"
+    },
+    "developer": {
+      "slug": "vib-apps",
+      "title": "Vib Apps Developer Guide",
+      "category": "Core Infrastructure",
+      "description": "Onboard apps with .vibtools metadata, integrate the /api/apps Store API and get.vib.tools edge router, and deploy to Cloudflare Pages.",
+      "accentColor": "#1D6CF6",
+      "docsPath": "docs/dev",
+      "ctaLabel": "GitHub",
+      "ctaUrl": "https://github.com/JILLU-Games/vibtools-apps"
+    }
+  }
+}

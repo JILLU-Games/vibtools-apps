@@ -2,11 +2,11 @@ import { cn } from "../../lib/cn.js";
 import { Icon } from "./Icon.js";
 
 /**
- * Creates a flat Badge pill element.
+ * Creates a flat Badge element.
  *
  * @param {Object} options
  * @param {string} options.text - Badge label text
- * @param {"neutral"|"accent"|"success"|"warn"} [options.variant="neutral"]
+ * @param {"neutral"|"accent"|"success"|"paid"|"warn"|"mono"} [options.variant="neutral"]
  * @param {string|Node} [options.icon] - Optional leading icon
  * @param {string} [options.className=""]
  * @returns {HTMLSpanElement}

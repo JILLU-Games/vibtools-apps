@@ -2,26 +2,34 @@ import { cn } from "../../lib/cn.js";
 import { Icon } from "./Icon.js";
 
 /**
- * Creates a flat, accessible Button element.
+ * Creates a flat, accessible Button (or button-styled semantic Link when href is supplied).
  *
  * @param {Object} options
  * @param {string|Node} [options.label] - Text label or DOM node
  * @param {string|Node} [options.icon] - Icon name string or DOM node
  * @param {"default"|"primary"|"secondary"|"ghost"|"danger"} [options.variant="default"]
- * @param {"sm"|"md"} [options.size="md"]
+ * @param {"sm"|"md"|"lg"} [options.size="md"]
+ * @param {boolean} [options.fullWidth=false]
+ * @param {string} [options.href] - When provided, renders a semantic <a> styled as a button
+ * @param {string} [options.target]
+ * @param {string} [options.rel]
  * @param {Function} [options.onClick]
  * @param {"button"|"submit"|"reset"} [options.type="button"]
  * @param {string} [options.title]
  * @param {string} [options.className]
  * @param {boolean} [options.disabled=false]
  * @param {string} [options.ariaLabel]
- * @returns {HTMLButtonElement}
+ * @returns {HTMLButtonElement|HTMLAnchorElement}
  */
 export function Button({
   label,
   icon,
   variant = "default",
   size = "md",
+  fullWidth = false,
+  href,
+  target,
+  rel,
   onClick,
   type = "button",
   title,
@@ -29,36 +37,49 @@ export function Button({
   disabled = false,
   ariaLabel
 } = {}) {
-  const btn = document.createElement("button");
-  btn.type = type;
+  const isLink = typeof href === "string" && href.length > 0;
+  const el = document.createElement(isLink ? "a" : "button");
+
+  if (isLink) {
+    el.href = href;
+    if (target) el.target = target;
+    if (rel) {
+      el.rel = rel;
+    } else if (target === "_blank") {
+      el.rel = "noopener noreferrer";
+    }
+  } else {
+    el.type = type;
+    if (disabled) el.disabled = true;
+  }
 
   const variantClass = variant !== "default" ? `ui-btn--${variant}` : "";
-  const sizeClass = size === "sm" ? "ui-btn--sm" : "ui-btn--md";
+  const sizeClass = size === "sm" ? "ui-btn--sm" : size === "lg" ? "ui-btn--lg" : "ui-btn--md";
 
-  btn.className = cn("ui-btn", variantClass, sizeClass, className);
+  el.className = cn("ui-btn", variantClass, sizeClass, fullWidth && "ui-btn--full", className);
 
-  if (title) btn.title = title;
-  if (ariaLabel) btn.setAttribute("aria-label", ariaLabel);
-  if (disabled) btn.disabled = true;
+  if (title) el.title = title;
+  if (ariaLabel) el.setAttribute("aria-label", ariaLabel);
 
   if (icon) {
-    const iconEl = typeof icon === "string" ? Icon(icon, size === "sm" ? 14 : 16) : icon;
-    btn.appendChild(iconEl);
+    const iconSize = size === "sm" ? 14 : 16;
+    const iconEl = typeof icon === "string" ? Icon(icon, iconSize) : icon;
+    el.appendChild(iconEl);
   }
 
   if (label) {
     if (typeof label === "string") {
       const span = document.createElement("span");
       span.textContent = label;
-      btn.appendChild(span);
+      el.appendChild(span);
     } else if (label instanceof Node) {
-      btn.appendChild(label);
+      el.appendChild(label);
     }
   }
 
   if (typeof onClick === "function") {
-    btn.addEventListener("click", onClick);
+    el.addEventListener("click", onClick);
   }
 
-  return btn;
+  return el;
 }

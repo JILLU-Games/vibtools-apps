@@ -12,11 +12,11 @@ import { Footer } from "./Footer.js";
  * @param {Function} [options.onSearch]
  * @returns {{ element: HTMLElement, viewRoot: HTMLElement, updateActiveRoute: Function, updateCategories: Function, resetSearch: Function }}
  */
-export function MainLayout({ initialRoute, initialCategories, onSearch } = {}) {
+export function MainLayout({ initialRoute, initialCategories, initialQuery = "", onSearch } = {}) {
   const shell = document.createElement("div");
   shell.className = "app-shell";
 
-  const header = Header({ onSearch });
+  const header = Header({ onSearch, initialQuery });
   shell.appendChild(header);
 
   const body = document.createElement("div");
@@ -45,12 +45,17 @@ export function MainLayout({ initialRoute, initialCategories, onSearch } = {}) {
       sidebar.updateActiveRoute(route);
       mobileNav.updateActiveRoute(route);
     },
-    updateCategories(categories) {
-      sidebar.updateCategories(categories);
+    updateCategories(categories, counts = {}, total = 0) {
+      sidebar.updateCategories(categories, counts, total);
     },
     resetSearch() {
       if (header.searchInput) {
         header.searchInput.value = "";
+      }
+    },
+    setSearchValue(value) {
+      if (header.searchInput) {
+        header.searchInput.value = value || "";
       }
     }
   };
