@@ -9,6 +9,7 @@
 ## 1. Current Status
 
 - **Project Status:** Production Ready & Hardened (All 4 Phases Completed — 4/4)
+- **Git Repository:** `https://github.com/JILLU-Games/vibtools-apps.git` (Pushed to branch `main`)
 - **Active / Next Phase:** Ready for Production Deployment to Cloudflare Pages
 - **Completed BugFix Phases:**
   - Phase 1 (Mock/Demo Fallback Engine)
