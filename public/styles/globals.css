@@ -487,9 +487,19 @@ pre {
   color: var(--text-primary);
 }
 
-.ui-markdown h1 { font-size: var(--text-lg); border-bottom: 1px solid var(--border-muted); padding-bottom: 4px; }
-.ui-markdown h2 { font-size: var(--text-md); }
-.ui-markdown h3 { font-size: var(--text-base); }
+.ui-markdown h1 {
+  font-size: var(--text-lg);
+  border-bottom: 1px solid var(--border-muted);
+  padding-bottom: 4px;
+}
+
+.ui-markdown h2 {
+  font-size: var(--text-md);
+}
+
+.ui-markdown h3 {
+  font-size: var(--text-base);
+}
 
 .ui-markdown p {
   margin-bottom: var(--sp-3);
