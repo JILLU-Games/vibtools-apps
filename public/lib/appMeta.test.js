@@ -10,7 +10,10 @@ import {
   buildInstallCommand,
   buildDownloadUrl,
   filterApps,
-  computeCategoryCounts
+  computeCategoryCounts,
+  sortApps,
+  getSupportedPlatforms,
+  getSupportedArchitectures
 } from "./appMeta.js";
 import { parseRoute } from "./router.js";
 import { fetchAppDetail } from "./api.js";
@@ -140,3 +143,61 @@ test("BUG-15: fetchAppDetail passes through AbortError cleanly without wrapping"
     globalThis.fetch = originalFetch;
   }
 });
+
+test("sortApps sorts deterministically by name-asc, name-desc, and latest release date without mutating input", () => {
+  const sample = [
+    {
+      slug: "vibclip",
+      name: "VibClip",
+      latest: "v1.2.0",
+      versions: { "v1.2.0": { released_at: "2026-06-01" } }
+    },
+    {
+      slug: "calgrid",
+      name: "CalGrid",
+      latest: "v1.0.3",
+      versions: { "v1.0.3": { released_at: "2026-11-15" } }
+    },
+    {
+      slug: "devprompt",
+      name: "DevPrompt",
+      latest: "v2.0.0",
+      versions: { "v2.0.0": { released_at: "2026-09-20" } }
+    }
+  ];
+
+  const asc = sortApps(sample, "name-asc");
+  assert.deepEqual(
+    asc.map((a) => a.slug),
+    ["calgrid", "devprompt", "vibclip"]
+  );
+
+  const desc = sortApps(sample, "name-desc");
+  assert.deepEqual(
+    desc.map((a) => a.slug),
+    ["vibclip", "devprompt", "calgrid"]
+  );
+
+  const recent = sortApps(sample, "recent");
+  assert.deepEqual(
+    recent.map((a) => a.slug),
+    ["calgrid", "devprompt", "vibclip"]
+  );
+
+  // Original order must remain untouched
+  assert.equal(sample[0].slug, "vibclip");
+});
+
+test("getSupportedPlatforms and getSupportedArchitectures extract trimmed real metadata only", () => {
+  assert.deepEqual(getSupportedPlatforms({ platforms: [" Windows ", "", "Linux"] }), [
+    "Windows",
+    "Linux"
+  ]);
+  assert.deepEqual(getSupportedPlatforms({}), []);
+  assert.deepEqual(getSupportedArchitectures({ architectures: [" x64 ", "arm64"] }), [
+    "x64",
+    "arm64"
+  ]);
+  assert.deepEqual(getSupportedArchitectures(null), []);
+});
+

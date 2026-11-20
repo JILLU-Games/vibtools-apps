@@ -8,8 +8,43 @@ import {
   formatReleaseDate,
   formatVersionLabel,
   buildInstallCommand,
-  buildDownloadUrl
+  buildDownloadUrl,
+  getSupportedPlatforms,
+  getSupportedArchitectures
 } from "../../lib/appMeta.js";
+
+/**
+ * Provides transient visual confirmation ("Copied" + check icon) on a copy button.
+ *
+ * @param {HTMLButtonElement} btn
+ * @param {string} defaultLabel
+ * @param {string} defaultIcon
+ */
+function flashCopiedState(btn, defaultLabel = "", defaultIcon = "copy") {
+  if (!btn) return;
+  if (btn._copyTimer) clearTimeout(btn._copyTimer);
+
+  btn.classList.add("is-copied");
+  btn.innerHTML = "";
+  btn.appendChild(Icon("check", 14));
+  if (defaultLabel) {
+    const span = document.createElement("span");
+    span.textContent = "Copied";
+    btn.appendChild(span);
+  }
+
+  btn._copyTimer = setTimeout(() => {
+    btn.classList.remove("is-copied");
+    btn.innerHTML = "";
+    btn.appendChild(Icon(defaultIcon, 14));
+    if (defaultLabel) {
+      const span = document.createElement("span");
+      span.textContent = defaultLabel;
+      btn.appendChild(span);
+    }
+    btn._copyTimer = null;
+  }, 1800);
+}
 
 /**
  * Renders a two-column detail loading skeleton while app metadata fetches.
@@ -99,11 +134,12 @@ export function AppDetailView({ slug } = {}) {
 
 function renderError(container, errorMessage) {
   const errorBox = document.createElement("div");
-  errorBox.className = "app-grid__empty";
+  errorBox.className = "app-grid__empty app-grid__empty--error";
+  errorBox.setAttribute("role", "alert");
 
   const iconEl = document.createElement("div");
-  iconEl.className = "app-grid__empty-icon";
-  iconEl.appendChild(Icon("alert", 24));
+  iconEl.className = "app-grid__empty-icon app-grid__empty-icon--error";
+  iconEl.appendChild(Icon("alert", 20));
   errorBox.appendChild(iconEl);
 
   const title = document.createElement("h2");
@@ -130,6 +166,9 @@ function renderError(container, errorMessage) {
 }
 
 function renderDetail(container, app, docs) {
+  const platforms = getSupportedPlatforms(app);
+  const architectures = getSupportedArchitectures(app);
+
   // 1. Breadcrumb Navigation Row
   const breadcrumb = document.createElement("nav");
   breadcrumb.className = "app-detail__breadcrumb";
@@ -171,7 +210,7 @@ function renderDetail(container, app, docs) {
 
   container.appendChild(breadcrumb);
 
-  // 2. Compact App Header (Icon + Name + Tagline + Closely Grouped Metadata Badges)
+  // 2. Refined Application Header & Branding
   const headerPanel = document.createElement("header");
   headerPanel.className = "app-detail__header";
 
@@ -210,6 +249,15 @@ function renderDetail(container, app, docs) {
   nameEl.textContent = app.name || app.slug;
   nameRow.appendChild(nameEl);
 
+  if (app.latest) {
+    nameRow.appendChild(
+      Badge({
+        text: formatVersionLabel(app.latest),
+        variant: "mono"
+      })
+    );
+  }
+
   if (app.access) {
     const isFree = app.access.toLowerCase() === "free";
     const isPaid = app.access.toLowerCase() === "paid";
@@ -226,15 +274,6 @@ function renderDetail(container, app, docs) {
       Badge({
         text: app.category,
         variant: "neutral"
-      })
-    );
-  }
-
-  if (app.latest) {
-    nameRow.appendChild(
-      Badge({
-        text: formatVersionLabel(app.latest),
-        variant: "mono"
       })
     );
   }
@@ -279,11 +318,24 @@ function renderDetail(container, app, docs) {
   installCard.className = "app-detail__install-card";
   installCard.setAttribute("aria-labelledby", "install-panel-heading");
 
+  const installHead = document.createElement("div");
+  installHead.className = "app-detail__panel-head";
+
   const installHeading = document.createElement("h2");
   installHeading.id = "install-panel-heading";
   installHeading.className = "app-detail__panel-title";
   installHeading.textContent = "Download & Install";
-  installCard.appendChild(installHeading);
+  installHead.appendChild(installHeading);
+
+  if (versionKeys.length > 0) {
+    installHead.appendChild(
+      Badge({
+        text: `${versionKeys.length} ${versionKeys.length === 1 ? "release" : "releases"}`,
+        variant: "neutral"
+      })
+    );
+  }
+  installCard.appendChild(installHead);
 
   // Version Selector
   const selectField = document.createElement("div");
@@ -294,6 +346,9 @@ function renderDetail(container, app, docs) {
   selectLabel.htmlFor = "app-version-select";
   selectLabel.textContent = "Release Version";
   selectField.appendChild(selectLabel);
+
+  const selectWrap = document.createElement("div");
+  selectWrap.className = "app-detail__select-wrap";
 
   const versionSelect = document.createElement("select");
   versionSelect.id = "app-version-select";
@@ -324,8 +379,47 @@ function renderDetail(container, app, docs) {
     versionSelect.disabled = true;
   }
 
-  selectField.appendChild(versionSelect);
+  selectWrap.appendChild(versionSelect);
+  selectWrap.appendChild(Icon("chevron-down", 14));
+  selectField.appendChild(selectWrap);
   installCard.appendChild(selectField);
+
+  // Truthful Supported Platform & Architecture Summary Chips (when declared in real config)
+  if (platforms.length > 0 || architectures.length > 0) {
+    const compatBlock = document.createElement("div");
+    compatBlock.className = "app-detail__compat";
+
+    const compatLabel = document.createElement("div");
+    compatLabel.className = "app-detail__field-label";
+    compatLabel.textContent = "Supported Environment";
+    compatBlock.appendChild(compatLabel);
+
+    const compatTags = document.createElement("div");
+    compatTags.className = "app-detail__compat-tags";
+
+    platforms.forEach((plat) => {
+      compatTags.appendChild(
+        Badge({
+          text: plat,
+          variant: "neutral",
+          icon: "monitor"
+        })
+      );
+    });
+
+    architectures.forEach((arch) => {
+      compatTags.appendChild(
+        Badge({
+          text: arch,
+          variant: "mono",
+          icon: "cpu"
+        })
+      );
+    });
+
+    compatBlock.appendChild(compatTags);
+    installCard.appendChild(compatBlock);
+  }
 
   // Primary Direct Binary Download Link (semantic <a>, no window.open)
   const dlLinkLabel = document.createElement("span");
@@ -349,13 +443,27 @@ function renderDetail(container, app, docs) {
   const cliBlock = document.createElement("div");
   cliBlock.className = "app-detail__cli-block";
 
+  const cliHead = document.createElement("div");
+  cliHead.className = "app-detail__cli-head";
+
   const cliLabel = document.createElement("div");
   cliLabel.className = "app-detail__field-label";
   cliLabel.textContent =
     app.installer?.type && app.installer.type.toLowerCase() !== "powershell"
       ? `${app.installer.type} CLI`
       : "PowerShell CLI";
-  cliBlock.appendChild(cliLabel);
+  cliHead.appendChild(cliLabel);
+
+  const cliGuideLink = document.createElement("a");
+  cliGuideLink.href = "/cli";
+  cliGuideLink.className = "app-detail__cli-help";
+  cliGuideLink.textContent = "CLI Guide";
+  cliGuideLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    navigate("/cli");
+  });
+  cliHead.appendChild(cliGuideLink);
+  cliBlock.appendChild(cliHead);
 
   const codeBox = document.createElement("div");
   codeBox.className = "ui-code-box";
@@ -365,6 +473,7 @@ function renderDetail(container, app, docs) {
   codeBox.appendChild(codeText);
 
   const copyCodeBtn = Button({
+    label: "Copy",
     icon: "copy",
     variant: "secondary",
     size: "sm",
@@ -374,6 +483,7 @@ function renderDetail(container, app, docs) {
       const cmd = buildInstallCommand(app.slug, selectedVersion, app.latest);
       const copied = await copyToClipboard(cmd);
       if (copied) {
+        flashCopiedState(copyCodeBtn, "Copy", "copy");
         toast.success(`Copied: ${cmd}`);
       } else {
         toast.error("Failed to copy command");
@@ -414,20 +524,14 @@ function renderDetail(container, app, docs) {
   const sizeMeta = createMetaRow("File Size", "file");
 
   // Conditional read-only Platforms & Architecture specification rows (truthful metadata display)
-  if (Array.isArray(app.platforms) && app.platforms.length > 0) {
-    const platforms = app.platforms.map((p) => String(p).trim()).filter(Boolean);
-    if (platforms.length > 0) {
-      const platformMeta = createMetaRow("Platforms", "monitor");
-      platformMeta.dd.textContent = platforms.join(" · ");
-    }
+  if (platforms.length > 0) {
+    const platformMeta = createMetaRow("Platforms", "monitor");
+    platformMeta.dd.textContent = platforms.join(" · ");
   }
 
-  if (Array.isArray(app.architectures) && app.architectures.length > 0) {
-    const architectures = app.architectures.map((a) => String(a).trim()).filter(Boolean);
-    if (architectures.length > 0) {
-      const archMeta = createMetaRow("Architecture", "cpu");
-      archMeta.dd.textContent = architectures.join(" · ");
-    }
+  if (architectures.length > 0) {
+    const archMeta = createMetaRow("Architecture", "cpu");
+    archMeta.dd.textContent = architectures.join(" · ");
   }
 
   // Checksum Row (with Show Full toggle + Copy button)
@@ -441,7 +545,7 @@ function renderDetail(container, app, docs) {
   hashDt.className = "app-detail__meta-key";
   hashDt.appendChild(Icon("shield", 13));
   const hashKeyText = document.createElement("span");
-  hashKeyText.textContent = "SHA256";
+  hashKeyText.textContent = "SHA256 Checksum";
   hashDt.appendChild(hashKeyText);
   hashHeader.appendChild(hashDt);
 
@@ -462,6 +566,7 @@ function renderDetail(container, app, docs) {
   });
 
   const copyHashBtn = Button({
+    label: "Copy",
     icon: "copy",
     variant: "ghost",
     size: "sm",
@@ -472,6 +577,7 @@ function renderDetail(container, app, docs) {
       if (activeObj?.sha256) {
         const copied = await copyToClipboard(activeObj.sha256);
         if (copied) {
+          flashCopiedState(copyHashBtn, "Copy", "copy");
           toast.success("SHA256 checksum copied");
         } else {
           toast.error("Failed to copy checksum");
@@ -726,24 +832,34 @@ function renderDetail(container, app, docs) {
     reqTitle.textContent = "System Requirements";
     reqCard.appendChild(reqTitle);
 
-    const reqList = document.createElement("ul");
-    reqList.className = "app-detail__req-list";
-
     if (Array.isArray(app.requirements)) {
+      const reqList = document.createElement("ul");
+      reqList.className = "app-detail__req-list";
       app.requirements.forEach((req) => {
         const li = document.createElement("li");
         li.textContent = String(req);
         reqList.appendChild(li);
       });
+      reqCard.appendChild(reqList);
     } else {
+      const reqGrid = document.createElement("dl");
+      reqGrid.className = "app-detail__req-grid";
       Object.entries(app.requirements).forEach(([k, v]) => {
-        const li = document.createElement("li");
-        li.textContent = `${k}: ${v}`;
-        reqList.appendChild(li);
+        const row = document.createElement("div");
+        row.className = "app-detail__req-row";
+        const dt = document.createElement("dt");
+        dt.className = "app-detail__req-key";
+        dt.textContent = String(k);
+        const dd = document.createElement("dd");
+        dd.className = "app-detail__req-val";
+        dd.textContent = String(v);
+        row.appendChild(dt);
+        row.appendChild(dd);
+        reqGrid.appendChild(row);
       });
+      reqCard.appendChild(reqGrid);
     }
 
-    reqCard.appendChild(reqList);
     mainCol.appendChild(reqCard);
   }
 

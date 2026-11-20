@@ -218,3 +218,89 @@ export function computeCategoryCounts(apps = []) {
     total: list.length
   };
 }
+
+/**
+ * Extracts real supported platform labels from an application's metadata.
+ * Returns an empty array if no platform data is provided (never fabricates).
+ *
+ * @param {Object} app
+ * @returns {string[]}
+ */
+export function getSupportedPlatforms(app) {
+  if (!Array.isArray(app?.platforms)) return [];
+  return app.platforms
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+}
+
+/**
+ * Extracts real supported CPU architecture labels from an application's metadata.
+ * Returns an empty array if no architecture data is provided (never fabricates).
+ *
+ * @param {Object} app
+ * @returns {string[]}
+ */
+export function getSupportedArchitectures(app) {
+  if (!Array.isArray(app?.architectures)) return [];
+  return app.architectures
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+}
+
+/**
+ * Extracts a sortable UTC timestamp (ms) for an application's latest release date.
+ * Returns 0 when no valid release date exists.
+ *
+ * @param {Object} app
+ * @returns {number}
+ */
+function getLatestReleaseTimestamp(app) {
+  const versions = app?.versions;
+  if (!versions || typeof versions !== "object") return 0;
+
+  const latestObj = app.latest && Object.hasOwn(versions, app.latest) ? versions[app.latest] : null;
+  const candidateDate = latestObj?.released_at;
+  if (typeof candidateDate === "string" && candidateDate.trim()) {
+    const parsed = Date.parse(candidateDate.trim());
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+
+  let newest = 0;
+  for (const key of Object.keys(versions)) {
+    const raw = versions[key]?.released_at;
+    if (typeof raw === "string" && raw.trim()) {
+      const parsed = Date.parse(raw.trim());
+      if (!Number.isNaN(parsed) && parsed > newest) {
+        newest = parsed;
+      }
+    }
+  }
+  return newest;
+}
+
+/**
+ * Sorts an application list deterministically without mutating the input array.
+ *
+ * @param {Array<Object>} apps
+ * @param {"name-asc"|"name-desc"|"recent"} [sortBy="name-asc"]
+ * @returns {Array<Object>}
+ */
+export function sortApps(apps = [], sortBy = "name-asc") {
+  const list = Array.isArray(apps) ? apps.slice() : [];
+  const labelOf = (app) => String(app?.name || app?.slug || "").trim().toLowerCase();
+
+  if (sortBy === "name-desc") {
+    return list.sort((a, b) => labelOf(b).localeCompare(labelOf(a)));
+  }
+
+  if (sortBy === "recent") {
+    return list.sort((a, b) => {
+      const diff = getLatestReleaseTimestamp(b) - getLatestReleaseTimestamp(a);
+      if (diff !== 0) return diff;
+      return labelOf(a).localeCompare(labelOf(b));
+    });
+  }
+
+  return list.sort((a, b) => labelOf(a).localeCompare(labelOf(b)));
+}
+

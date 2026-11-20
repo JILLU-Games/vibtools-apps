@@ -2,15 +2,15 @@
 
 > **Active Project:** `vib-apps-hub`  
 > **Target Domains:** `apps.vib.tools` (App Catalog) & `get.vib.tools` (Edge CLI & Direct Download Router)  
-> **Last Updated:** 2026-11-20 (Cycle 3 — ALL 4 PHASES COMPLETE & SIGNED OFF: Production SEO, Edge Meta/JSON-LD, `<noscript>`, Strict HTTP 404, Dynamic `sitemap.xml`/`llms.txt` & `42 / 42` Tests PASS)
+> **Last Updated:** 2026-11-20 (CalGrid repo `https://github.com/vibdocs/CalGrid` audited & synced into `registry.json` + `functions/_lib/registry.js`; UTF-8 BOM strip hardened in `functions/[[path]].js`)
 
 ---
 
 ## 1. Current Status
 
-- **Project Status:** **Production-Ready & Verified — Cycle 3 COMPLETE (`4 / 4` Phases Done; `8 / 8` SEO Items Closed; `42 / 42` Automated Tests PASS; Desktop & Mobile Chromium `0` Errors)**
+- **Project Status:** **Production-Ready & Verified** — `https://github.com/vibdocs/CalGrid` registered in `registry.json` & synced to `functions/_lib/registry.js`; awaiting v1 schema fix in `vibdocs/CalGrid/.vibtools/apps/app.config.json` so live catalog auto-populates cleanly.
 - **Git Repository:** `https://github.com/JILLU-Games/vibtools-apps.git` (Ready to commit & push to `main` for Cloudflare Pages deployment)
-- **Active / Next Phase:** **Operational Launch** — Paste live app GitHub repository URLs into `registry.json`, deploy to Cloudflare Pages, and submit `https://apps.vib.tools/sitemap.xml` to Google Search Console & Bing Webmaster Tools.
+- **Active / Next Phase:** **CalGrid Upstream Config Alignment & Launch** — Commit the Frozen v1 corrected `.vibtools/apps/app.config.json` to `vibdocs/CalGrid`, deploy to Cloudflare Pages, and submit `https://apps.vib.tools/sitemap.xml` to Google Search Console & Bing Webmaster Tools.
 - **Completed BugFix & Refinement Phases:**
   - Cycle 1 Phases 1–4 (Edge Routing/CORS, Frontend UI Parity, Caching/PWA)
   - Node.js 22 Edge Emulator & Dev Server (`server.js` & `package.json` on Port 3000)

@@ -46,13 +46,13 @@ export function CliGuideSection() {
 
   const heading = document.createElement("h1");
   heading.className = "app-catalog-header__title";
-  heading.textContent = "get.vib.tools CLI Guide";
+  heading.textContent = "CLI Installer Guide";
   titleBox.appendChild(heading);
 
   const desc = document.createElement("p");
   desc.className = "app-catalog-header__subtitle";
   desc.textContent =
-    "PowerShell edge installers and direct Cloudflare R2 binary redirects for Vib Tools applications.";
+    "PowerShell edge installers and direct Cloudflare R2 binary redirects powered by get.vib.tools.";
   titleBox.appendChild(desc);
   headerBar.appendChild(titleBox);
   container.appendChild(headerBar);
@@ -64,7 +64,7 @@ export function CliGuideSection() {
       badgeVariant: "accent",
       title: "1. Install Latest Version",
       desc: "Resolves and runs the latest stable PowerShell installer script for any registered application.",
-      template: 'irm "https://get.vib.tools/<app>" | iex',
+      template: 'irm "https://get.vib.tools/<slug>" | iex',
       example: 'irm "https://get.vib.tools/calgrid" | iex'
     },
     {
@@ -72,7 +72,7 @@ export function CliGuideSection() {
       badgeVariant: "accent",
       title: "2. Install Specific Version",
       desc: "Pins installation to a specific release version published in the application manifest.",
-      template: 'irm "https://get.vib.tools/<app>/<version>" | iex',
+      template: 'irm "https://get.vib.tools/<slug>/<version>" | iex',
       example: 'irm "https://get.vib.tools/calgrid/1.0.3" | iex'
     },
     {
@@ -80,7 +80,7 @@ export function CliGuideSection() {
       badgeVariant: "neutral",
       title: "3. Direct Binary Download (Latest)",
       desc: "Issues a direct 302 redirect to the latest binary stored on Cloudflare R2.",
-      template: "https://get.vib.tools/dl/<app>",
+      template: "https://get.vib.tools/dl/<slug>",
       example: "https://get.vib.tools/dl/calgrid"
     },
     {
@@ -88,7 +88,7 @@ export function CliGuideSection() {
       badgeVariant: "neutral",
       title: "4. Direct Binary Download (Versioned)",
       desc: "Issues a direct 302 redirect to a specific release version binary on Cloudflare R2.",
-      template: "https://get.vib.tools/dl/<app>/<version>",
+      template: "https://get.vib.tools/dl/<slug>/<version>",
       example: "https://get.vib.tools/dl/calgrid/1.0.3"
     }
   ];
@@ -149,6 +149,22 @@ export function CliGuideSection() {
       onClick: async () => {
         const copied = await copyToClipboard(item.example);
         if (copied) {
+          if (copyBtn._copyTimer) clearTimeout(copyBtn._copyTimer);
+          copyBtn.classList.add("is-copied");
+          copyBtn.innerHTML = "";
+          copyBtn.appendChild(Icon("check", 14));
+          const copiedSpan = document.createElement("span");
+          copiedSpan.textContent = "Copied";
+          copyBtn.appendChild(copiedSpan);
+          copyBtn._copyTimer = setTimeout(() => {
+            copyBtn.classList.remove("is-copied");
+            copyBtn.innerHTML = "";
+            copyBtn.appendChild(Icon("copy", 14));
+            const labelSpan = document.createElement("span");
+            labelSpan.textContent = "Copy";
+            copyBtn.appendChild(labelSpan);
+            copyBtn._copyTimer = null;
+          }, 1800);
           toast.success(`Copied: ${item.example}`);
         } else {
           toast.error("Failed to copy to clipboard");

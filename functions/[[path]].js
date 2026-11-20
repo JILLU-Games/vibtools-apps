@@ -344,7 +344,8 @@ export async function onRequestGet(context) {
     const safeName = String(config.name || canonicalSlug || slug).replace(/[^a-zA-Z0-9 ._()-]/g, "");
 
     const injectedHeader = `$APP_SLUG = "${safeSlug}"\r\n$APP_VERSION = "${safeVersion}"\r\n$APP_NAME = "${safeName}"\r\n\r\n`;
-    const fullScript = injectedHeader + installerScript;
+    const cleanInstallerScript = installerScript.replace(/^\uFEFF/, "");
+    const fullScript = injectedHeader + cleanInstallerScript;
 
     return getDomainText(fullScript, 200, {
       "Cache-Control": "public, max-age=300",

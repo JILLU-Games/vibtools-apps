@@ -7,8 +7,43 @@ import {
   formatVersionLabel,
   buildInstallCommand,
   filterApps,
-  computeCategoryCounts
+  sortApps,
+  computeCategoryCounts,
+  getSupportedPlatforms
 } from "../../lib/appMeta.js";
+
+/**
+ * Provides transient visual confirmation ("Copied" + check icon) on a copy button.
+ *
+ * @param {HTMLButtonElement} btn
+ * @param {string} defaultLabel
+ * @param {string} defaultIcon
+ */
+function flashCopiedState(btn, defaultLabel, defaultIcon = "copy") {
+  if (!btn) return;
+  if (btn._copyTimer) clearTimeout(btn._copyTimer);
+
+  btn.classList.add("is-copied");
+  btn.innerHTML = "";
+  btn.appendChild(Icon("check", 14));
+  if (defaultLabel) {
+    const span = document.createElement("span");
+    span.textContent = "Copied";
+    btn.appendChild(span);
+  }
+
+  btn._copyTimer = setTimeout(() => {
+    btn.classList.remove("is-copied");
+    btn.innerHTML = "";
+    btn.appendChild(Icon(defaultIcon, 14));
+    if (defaultLabel) {
+      const span = document.createElement("span");
+      span.textContent = defaultLabel;
+      btn.appendChild(span);
+    }
+    btn._copyTimer = null;
+  }, 1800);
+}
 
 /**
  * Creates a restrained app icon container that loads the real icon asset
@@ -88,9 +123,13 @@ function renderSkeletonCards(count = 3) {
  * @param {Object} [options.route] - Current active route
  * @param {string} [options.searchQuery=""] - Live search filter query
  * @param {"all"|"free"|"paid"} [options.activeAccess="all"] - License/access tier filter
+ * @param {"name-asc"|"name-desc"|"recent"} [options.activeSort="name-asc"] - Sort order
  * @param {boolean} [options.isLoading=false] - Initial catalog loading state
+ * @param {string} [options.errorMessage=""] - Catalog load error message if fetch failed
  * @param {Function} [options.onAccessChange] - Callback when license filter changes
+ * @param {Function} [options.onSortChange] - Callback when sort order changes
  * @param {Function} [options.onResetFilters] - Callback to clear active filters
+ * @param {Function} [options.onRetry] - Callback to retry loading catalog after error
  * @returns {HTMLElement}
  */
 export function AppGrid({
@@ -98,23 +137,33 @@ export function AppGrid({
   route = { view: "home" },
   searchQuery = "",
   activeAccess = "all",
+  activeSort = "name-asc",
   isLoading = false,
+  errorMessage = "",
   onAccessChange,
-  onResetFilters
+  onSortChange,
+  onResetFilters,
+  onRetry
 } = {}) {
   const container = document.createElement("div");
   container.className = "app-grid-section";
 
   const activeCategory = route.view === "category" && route.category ? route.category : "";
   const { categories, counts, total } = computeCategoryCounts(apps);
-  const filtered = filterApps(apps, {
-    category: activeCategory,
-    access: activeAccess,
-    query: searchQuery
-  });
+  const filtered = sortApps(
+    filterApps(apps, {
+      category: activeCategory,
+      access: activeAccess,
+      query: searchQuery
+    }),
+    activeSort
+  );
 
   const hasActiveFilters = Boolean(
-    activeCategory || (searchQuery && searchQuery.trim()) || (activeAccess && activeAccess !== "all")
+    activeCategory ||
+      (searchQuery && searchQuery.trim()) ||
+      (activeAccess && activeAccess !== "all") ||
+      (activeSort && activeSort !== "name-asc")
   );
 
   // Match canonical category casing if available
@@ -143,7 +192,7 @@ export function AppGrid({
   headingGroup.appendChild(subtitle);
   headerBar.appendChild(headingGroup);
 
-  if (!isLoading) {
+  if (!isLoading && !errorMessage) {
     const countLabel = hasActiveFilters
       ? `${filtered.length} of ${total} ${total === 1 ? "app" : "apps"}`
       : `${total} ${total === 1 ? "application" : "applications"}`;
@@ -157,7 +206,7 @@ export function AppGrid({
 
   container.appendChild(headerBar);
 
-  // 2. Mobile Category Chips Bar (visible < 768px)
+  // 2. Mobile Category Chips Bar (visible <= 768px when categories exist)
   if (categories.length > 0) {
     const categoryBar = document.createElement("div");
     categoryBar.className = "app-category-bar";
@@ -186,10 +235,14 @@ export function AppGrid({
     container.appendChild(categoryBar);
   }
 
-  // 3. Filter & Controls Toolbar (Access Tier Filter + Active Reset)
+  // 3. Discovery Filter & Sort Controls Toolbar
   const controlsBar = document.createElement("div");
   controlsBar.className = "app-filter-bar";
 
+  const leftControls = document.createElement("div");
+  leftControls.className = "app-filter-bar__group";
+
+  // License / Access Tier Segmented Control
   const accessGroup = document.createElement("div");
   accessGroup.className = "app-segmented";
   accessGroup.setAttribute("role", "group");
@@ -216,36 +269,126 @@ export function AppGrid({
     accessGroup.appendChild(btn);
   });
 
-  controlsBar.appendChild(accessGroup);
+  leftControls.appendChild(accessGroup);
+
+  // Inline Category Select (rendered dynamically on desktop/tablet > 768px; mobile uses horizontal category chips)
+  if (categories.length > 0) {
+    const catSelectWrap = document.createElement("div");
+    catSelectWrap.className = "app-select-wrap app-filter-bar__select app-filter-bar__select--category";
+    catSelectWrap.appendChild(Icon("layers", 13));
+
+    const catSelect = document.createElement("select");
+    catSelect.className = "app-toolbar-select";
+    catSelect.setAttribute("aria-label", "Filter by category");
+
+    const allOpt = document.createElement("option");
+    allOpt.value = "";
+    allOpt.textContent = `All Categories (${total})`;
+    if (!activeCategory) allOpt.selected = true;
+    catSelect.appendChild(allOpt);
+
+    categories.forEach((cat) => {
+      const opt = document.createElement("option");
+      opt.value = cat.toLowerCase();
+      opt.textContent = `${cat} (${counts[cat] || 0})`;
+      if (activeCategory.toLowerCase() === cat.toLowerCase()) opt.selected = true;
+      catSelect.appendChild(opt);
+    });
+
+    catSelect.addEventListener("change", (e) => {
+      const val = e.target.value;
+      if (!val) {
+        navigate("/");
+      } else {
+        navigate(`/category/${encodeURIComponent(val)}`);
+      }
+    });
+
+    catSelectWrap.appendChild(catSelect);
+    catSelectWrap.appendChild(Icon("chevron-down", 13));
+    leftControls.appendChild(catSelectWrap);
+  }
+
+  controlsBar.appendChild(leftControls);
+
+  // Right Controls: Sort Dropdown + Reset Action
+  const rightControls = document.createElement("div");
+  rightControls.className = "app-filter-bar__group app-filter-bar__group--end";
 
   if (hasActiveFilters && typeof onResetFilters === "function") {
     const resetBtn = Button({
-      label: "Reset filters",
+      label: "Reset",
       icon: "rotate",
       variant: "ghost",
       size: "sm",
+      title: "Reset search, filters, and sort",
       onClick: onResetFilters
     });
-    controlsBar.appendChild(resetBtn);
+    rightControls.appendChild(resetBtn);
   }
 
+  const sortWrap = document.createElement("div");
+  sortWrap.className = "app-select-wrap app-filter-bar__select";
+  sortWrap.appendChild(Icon("sort", 13));
+
+  const sortSelect = document.createElement("select");
+  sortSelect.id = "app-catalog-sort";
+  sortSelect.className = "app-toolbar-select";
+  sortSelect.setAttribute("aria-label", "Sort applications");
+
+  const sortOptions = [
+    { value: "name-asc", label: "Name (A–Z)" },
+    { value: "name-desc", label: "Name (Z–A)" },
+    { value: "recent", label: "Latest Release" }
+  ];
+
+  sortOptions.forEach((item) => {
+    const opt = document.createElement("option");
+    opt.value = item.value;
+    opt.textContent = item.label;
+    if (activeSort === item.value) opt.selected = true;
+    sortSelect.appendChild(opt);
+  });
+
+  sortSelect.addEventListener("change", (e) => {
+    if (typeof onSortChange === "function" && e.target.value !== activeSort) {
+      onSortChange(e.target.value);
+    }
+  });
+
+  sortWrap.appendChild(sortSelect);
+  sortWrap.appendChild(Icon("chevron-down", 13));
+  rightControls.appendChild(sortWrap);
+
+  controlsBar.appendChild(rightControls);
   container.appendChild(controlsBar);
 
-  // 4. Pinned Quick CLI Banner (home view when unfiltered and loaded)
-  if (!isLoading && route.view === "home" && !hasActiveFilters) {
-    const banner = document.createElement("div");
+  // 4. Pinned Quick CLI Installer Banner (home view when unfiltered and loaded without error)
+  if (!isLoading && !errorMessage && route.view === "home" && !hasActiveFilters) {
+    const banner = document.createElement("section");
     banner.className = "app-cli-banner";
+    banner.setAttribute("aria-label", "CLI Installer");
 
     const info = document.createElement("div");
     info.className = "app-cli-banner__info";
+
+    const metaStack = document.createElement("div");
+    metaStack.className = "app-cli-banner__meta";
 
     const labelRow = document.createElement("div");
     labelRow.className = "app-cli-banner__label";
     labelRow.appendChild(Icon("terminal", 15));
     const labelText = document.createElement("span");
-    labelText.textContent = "Edge CLI Installer";
+    labelText.textContent = "CLI Installer";
     labelRow.appendChild(labelText);
-    info.appendChild(labelRow);
+    metaStack.appendChild(labelRow);
+
+    const hintEl = document.createElement("span");
+    hintEl.className = "app-cli-banner__hint";
+    hintEl.textContent = "Replace <slug> with an app slug";
+    metaStack.appendChild(hintEl);
+
+    info.appendChild(metaStack);
 
     const cmdCode = document.createElement("code");
     cmdCode.className = "app-cli-banner__cmd";
@@ -266,7 +409,8 @@ export function AppGrid({
       onClick: async () => {
         const copied = await copyToClipboard('irm "https://get.vib.tools/<slug>" | iex');
         if (copied) {
-          toast.success("Installer template copied to clipboard");
+          flashCopiedState(copyBannerBtn, "Copy", "copy");
+          toast.success("Installer command template copied");
         } else {
           toast.error("Failed to copy command to clipboard");
         }
@@ -288,16 +432,56 @@ export function AppGrid({
     container.appendChild(banner);
   }
 
-  // 5. Application Cards Grid
+  // 5. Application Cards Grid / Distinct Loading, Error & Empty States
   const grid = document.createElement("div");
   grid.className = "app-grid";
 
+  // State A: Loading Skeleton
   if (isLoading) {
+    grid.setAttribute("aria-busy", "true");
     grid.appendChild(renderSkeletonCards(3));
     container.appendChild(grid);
     return container;
   }
 
+  // State B: Catalog Fetch Error (Explicit & Distinct from Empty State)
+  if (errorMessage) {
+    const errorState = document.createElement("div");
+    errorState.className = "app-grid__empty app-grid__empty--error";
+    errorState.setAttribute("role", "alert");
+
+    const errorIcon = document.createElement("div");
+    errorIcon.className = "app-grid__empty-icon app-grid__empty-icon--error";
+    errorIcon.appendChild(Icon("alert", 20));
+    errorState.appendChild(errorIcon);
+
+    const errorTitle = document.createElement("h2");
+    errorTitle.className = "app-grid__empty-title";
+    errorTitle.textContent = "Unable to load application catalog";
+    errorState.appendChild(errorTitle);
+
+    const errorDesc = document.createElement("p");
+    errorDesc.className = "app-grid__empty-desc";
+    errorDesc.textContent = errorMessage;
+    errorState.appendChild(errorDesc);
+
+    if (typeof onRetry === "function") {
+      const retryBtn = Button({
+        label: "Retry",
+        icon: "rotate",
+        variant: "primary",
+        size: "sm",
+        onClick: onRetry
+      });
+      errorState.appendChild(retryBtn);
+    }
+
+    grid.appendChild(errorState);
+    container.appendChild(grid);
+    return container;
+  }
+
+  // State C: Compact Empty State (Zero Fake Applications)
   if (filtered.length === 0) {
     const empty = document.createElement("div");
     empty.className = "app-grid__empty";
@@ -306,7 +490,7 @@ export function AppGrid({
 
     const emptyIcon = document.createElement("div");
     emptyIcon.className = "app-grid__empty-icon";
-    emptyIcon.appendChild(Icon(isCatalogEmpty ? "package" : "search", 24));
+    emptyIcon.appendChild(Icon(isCatalogEmpty ? "package" : "search", 20));
     empty.appendChild(emptyIcon);
 
     const emptyTitle = document.createElement("h2");
@@ -320,7 +504,7 @@ export function AppGrid({
     emptyDesc.className = "app-grid__empty-desc";
     if (isCatalogEmpty) {
       emptyDesc.textContent =
-        "New Vib Tools desktop applications and developer utilities will appear here once published.";
+        "Vib Tools desktop applications and developer utilities will appear here once published.";
     } else if (searchQuery && searchQuery.trim()) {
       emptyDesc.textContent = `No applications matched "${searchQuery.trim()}" with the current filters.`;
     } else {
@@ -350,10 +534,12 @@ export function AppGrid({
 
     grid.appendChild(empty);
   } else {
+    // State D: Populated Reusable Application Cards (Real Catalog Data Only)
     filtered.forEach((app) => {
       const versionsObj = app.versions || {};
       const latestVersionObj = app.latest ? versionsObj[app.latest] : null;
       const pkgFormat = getPackageFormat(latestVersionObj);
+      const platforms = getSupportedPlatforms(app);
 
       // TOP ZONE: 44px Icon + Name + Category + License Badge
       const headerEl = document.createElement("div");
@@ -392,7 +578,7 @@ export function AppGrid({
         headerEl.appendChild(accessBadge);
       }
 
-      // MIDDLE ZONE: 2-line Clamped Tagline + Real Version/Format Meta Row
+      // MIDDLE ZONE: 2-line Clamped Description + Real Version/Platform/Package Metadata
       const bodyEl = document.createElement("div");
       bodyEl.className = "app-card__body-inner";
 
@@ -413,6 +599,16 @@ export function AppGrid({
         );
       }
 
+      if (platforms.length > 0) {
+        metaRow.appendChild(
+          Badge({
+            text: platforms.join(" · "),
+            variant: "neutral",
+            icon: "monitor"
+          })
+        );
+      }
+
       if (pkgFormat) {
         metaRow.appendChild(
           Badge({
@@ -421,9 +617,7 @@ export function AppGrid({
             icon: "package"
           })
         );
-      }
-
-      if (app.installer?.type) {
+      } else if (app.installer?.type) {
         const installerLabel =
           app.installer.type.toLowerCase() === "powershell"
             ? "PowerShell"
@@ -441,12 +635,12 @@ export function AppGrid({
         bodyEl.appendChild(metaRow);
       }
 
-      // BOTTOM ZONE: Primary Details Action + Secondary CLI Copy Action
+      // BOTTOM ZONE: Primary Details Action + Secondary CLI Install Action
       const footerEl = document.createElement("div");
       footerEl.className = "app-card__footer-inner";
 
       const detailsBtn = Button({
-        label: "View Details",
+        label: "Details",
         variant: "primary",
         size: "sm",
         onClick: (e) => {
@@ -456,7 +650,7 @@ export function AppGrid({
       });
 
       const installBtn = Button({
-        label: "Copy CLI",
+        label: "Install CLI",
         icon: "terminal",
         variant: "secondary",
         size: "sm",
@@ -467,6 +661,7 @@ export function AppGrid({
           const cmd = buildInstallCommand(app.slug, app.latest, app.latest);
           const copied = await copyToClipboard(cmd);
           if (copied) {
+            flashCopiedState(installBtn, "Install CLI", "terminal");
             toast.success(`Copied: ${cmd}`);
           } else {
             toast.error("Failed to copy install command");

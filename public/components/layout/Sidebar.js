@@ -111,7 +111,7 @@ export function Sidebar({
     extLink.target = "_blank";
     extLink.rel = "noopener noreferrer";
     extLink.className = "app-sidebar__link app-sidebar__link--external";
-    extLink.appendChild(Icon(item.icon, 14));
+    extLink.appendChild(Icon(item.icon, 15));
 
     const labelSpan = document.createElement("span");
     labelSpan.className = "app-sidebar__link-label";
@@ -138,7 +138,7 @@ export function Sidebar({
       link.className = "app-sidebar__link";
       link.dataset.category = cat.toLowerCase();
 
-      link.appendChild(Icon("layers", 14));
+      link.appendChild(Icon("layers", 15));
 
       const span = document.createElement("span");
       span.className = "app-sidebar__link-label";

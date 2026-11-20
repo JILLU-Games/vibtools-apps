@@ -102,7 +102,9 @@ test("Pure Repo-Only & Wrangler 3 invariant: mockData.js deleted, registry.json 
     fs.readFileSync(path.join(process.cwd(), "registry.json"), "utf8")
   );
   assert.ok(Array.isArray(rawRegistry));
-  assert.deepEqual(rawRegistry, []);
+  for (const item of rawRegistry) {
+    assert.ok(normalizeRegistryEntry(item), `Invalid registry.json entry: ${JSON.stringify(item)}`);
+  }
 
   const { default: syncedRegistry } = await import("./functions/_lib/registry.js");
   assert.deepEqual(syncedRegistry, rawRegistry);
@@ -122,8 +124,9 @@ test("Pure Repo-Only & Wrangler 3 invariant: mockData.js deleted, registry.json 
 });
 
 test("Pure Repo-Only default: GET /api/apps returns empty live catalog with no-store and unregistered slugs return 404 everywhere", async () => {
+  const emptyEnv = { __REGISTRY_OVERRIDE: [] };
   for (const url of ["http://localhost:3000/api/apps", "https://apps.vib.tools/api/apps"]) {
-    const res = await handleEdgeRequest(new Request(url));
+    const res = await handleEdgeRequest(new Request(url), emptyEnv);
     assert.equal(res.status, 200);
     assert.equal(res.headers.get("X-Catalog-Source"), "live");
     assert.equal(res.headers.get("Cache-Control"), "no-store");
@@ -133,17 +136,20 @@ test("Pure Repo-Only default: GET /api/apps returns empty live catalog with no-s
   }
 
   const missingDetail = await handleEdgeRequest(
-    new Request("http://localhost:3000/api/apps?slug=calgrid")
+    new Request("http://localhost:3000/api/apps?slug=calgrid"),
+    emptyEnv
   );
   assert.equal(missingDetail.status, 404);
 
   const missingCli = await handleEdgeRequest(
-    new Request("http://localhost:3000/calgrid?mode=get")
+    new Request("http://localhost:3000/calgrid?mode=get"),
+    emptyEnv
   );
   assert.equal(missingCli.status, 404);
 
   const missingDl = await handleEdgeRequest(
-    new Request("http://localhost:3000/dl/calgrid?mode=get")
+    new Request("http://localhost:3000/dl/calgrid?mode=get"),
+    emptyEnv
   );
   assert.equal(missingDl.status, 404);
 });
@@ -227,11 +233,12 @@ test("Direct download route on get.vib.tools returns 302 redirect to R2 binary f
 // --- Cycle 2 Regression Suite (BUG-01 through BUG-11, BUG-13, BUG-17) ---
 
 test("BUG-01: Live and local hosts never serve mock data and never cache empty payloads", async () => {
+  const emptyEnv = { __REGISTRY_OVERRIDE: [] };
   const prodRes = await appsApiGet({
     request: new Request("https://apps.vib.tools/api/apps", {
       headers: { Host: "apps.vib.tools" }
     }),
-    env: {},
+    env: emptyEnv,
     waitUntil: () => {}
   });
   assert.equal(prodRes.status, 200);
@@ -243,7 +250,7 @@ test("BUG-01: Live and local hosts never serve mock data and never cache empty p
 
   const localRes = await appsApiGet({
     request: new Request("http://localhost:3000/api/apps"),
-    env: {},
+    env: emptyEnv,
     waitUntil: () => {}
   });
   assert.equal(localRes.status, 200);
@@ -313,7 +320,8 @@ test("BUG-07: SPA fallback emits single clean Content-Type: text/html; charset=u
   assert.equal(cliRes.headers.get("content-type"), "text/html; charset=utf-8");
 
   const missingAppRes = await handleEdgeRequest(
-    new Request("http://localhost:3000/app/calgrid", { headers: { Accept: "text/html" } })
+    new Request("http://localhost:3000/app/calgrid", { headers: { Accept: "text/html" } }),
+    { __REGISTRY_OVERRIDE: [] }
   );
   assert.equal(missingAppRes.status, 404);
   assert.equal(missingAppRes.headers.get("content-type"), "text/html; charset=utf-8");
@@ -787,7 +795,8 @@ test("Forensic parity: getRegistry deduplicates duplicate GitHub repo URLs and A
   ]);
   assert.equal(deduped.length, 1);
 
-  const rootLlms = await handleEdgeRequest(new Request("http://localhost:3000/llms.txt"));
+  const emptyEnv = { __REGISTRY_OVERRIDE: [] };
+  const rootLlms = await handleEdgeRequest(new Request("http://localhost:3000/llms.txt"), emptyEnv);
   assert.equal(rootLlms.status, 200);
   assert.equal(rootLlms.headers.get("Access-Control-Allow-Origin"), "*");
   assert.ok((await rootLlms.text()).includes("vibtools-app.schema.json"));
@@ -801,7 +810,7 @@ test("Forensic parity: getRegistry deduplicates duplicate GitHub repo URLs and A
   assert.equal(robots.status, 200);
   assert.ok((await robots.text()).includes("Sitemap: https://apps.vib.tools/sitemap.xml"));
 
-  const sitemap = await handleEdgeRequest(new Request("http://localhost:3000/sitemap.xml"));
+  const sitemap = await handleEdgeRequest(new Request("http://localhost:3000/sitemap.xml"), emptyEnv);
   assert.equal(sitemap.status, 200);
   assert.equal(sitemap.headers.get("Content-Type"), "application/xml; charset=utf-8");
   const xml = await sitemap.text();
@@ -1166,13 +1175,14 @@ test("Cycle 3 SEO-06 & SEO-07: get.vib.tools attaches X-Robots-Tag: noindex, nof
 
 test("Cycle 3 SEO-03 & SEO-08: Dynamic /sitemap.xml and /llms.txt list live apps, skip broken repos, escape XML, and isolate get.vib.tools", async () => {
   // 1. Empty registry defaults
-  const emptySitemap = await handleEdgeRequest(new Request("http://localhost:3000/sitemap.xml"));
+  const emptyEnv = { __REGISTRY_OVERRIDE: [] };
+  const emptySitemap = await handleEdgeRequest(new Request("http://localhost:3000/sitemap.xml"), emptyEnv);
   assert.equal(emptySitemap.status, 200);
   assert.equal(emptySitemap.headers.get("Content-Type"), "application/xml; charset=utf-8");
   const emptyXml = await emptySitemap.text();
   assert.equal((emptyXml.match(/<url>/g) || []).length, 9);
 
-  const emptyLlms = await handleEdgeRequest(new Request("http://localhost:3000/llms.txt"));
+  const emptyLlms = await handleEdgeRequest(new Request("http://localhost:3000/llms.txt"), emptyEnv);
   assert.equal(emptyLlms.status, 200);
   assert.equal(emptyLlms.headers.get("Access-Control-Allow-Origin"), "*");
   assert.equal((await emptyLlms.text()).includes("## Published Applications"), false);
@@ -1242,6 +1252,48 @@ test("Cycle 3 SEO-03 & SEO-08: Dynamic /sitemap.xml and /llms.txt list live apps
     assert.equal(res.headers.get("Cache-Control"), "no-store");
   }
 });
+
+test("Edge CLI streamer strips leading UTF-8 BOM from repository PowerShell scripts before prepending injected variables", async () => {
+  const originalFetch = globalThis.fetch;
+  const bomRepo = "vib-tools/bom-ps1-test";
+  const bomEnv = { __REGISTRY_OVERRIDE: [`https://github.com/${bomRepo}`] };
+
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes(`${bomRepo}/contents/.vibtools/apps/app.config.json`)) {
+      return new Response(
+        JSON.stringify({
+          $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+          schemaVersion: 1,
+          slug: "bomapp",
+          name: "BomApp",
+          latest: "1.0.0",
+          installer: ".vibtools/apps/installer.ps1",
+          versions: {
+            "1.0.0": { url: "https://dl.vib.tools/BomApp/v1.0.0/BomApp.zip" }
+          }
+        }),
+        { status: 200 }
+      );
+    }
+    if (u.includes(`${bomRepo}/contents/.vibtools/apps/installer.ps1`)) {
+      return new Response("\uFEFF# BomApp Installer\r\nWrite-Host $APP_VERSION\r\n", { status: 200 });
+    }
+    return new Response("Not Found", { status: 404 });
+  };
+
+  try {
+    const res = await handleEdgeRequest(new Request("http://localhost:3000/bomapp?mode=get"), bomEnv);
+    assert.equal(res.status, 200);
+    const body = await res.text();
+    assert.equal(body.includes("\uFEFF"), false, "Streamed PowerShell script must not contain mid-file UTF-8 BOM");
+    assert.ok(body.startsWith('$APP_SLUG = "bomapp"'));
+    assert.ok(body.includes("# BomApp Installer"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 
 
 

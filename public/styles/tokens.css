@@ -146,6 +146,7 @@
 
   --status-error: #d96460;
   --status-error-soft: rgba(217, 100, 96, 0.14);
+  --status-error-border: rgba(217, 100, 96, 0.34);
   --status-warn: #c49645;
   --status-warn-soft: rgba(196, 150, 69, 0.14);
 
@@ -198,7 +199,8 @@
   --status-success-border: rgba(26, 127, 55, 0.32);
 
   --status-error: #cf222e;
-  --status-error-soft: rgba(207, 34, 46, 0.12);
+  --status-error-soft: rgba(207, 34, 46, 0.1);
+  --status-error-border: rgba(207, 34, 46, 0.32);
   --status-warn: #9a6700;
   --status-warn-soft: rgba(154, 103, 0, 0.12);
 

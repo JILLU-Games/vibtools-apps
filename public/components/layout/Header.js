@@ -57,17 +57,44 @@ export function Header({ onSearch, initialQuery = "" } = {}) {
     ariaLabel: "Search applications",
     className: "app-header__search-field",
     onInput: (val) => {
+      syncSearchControls(val);
       if (typeof onSearch === "function") {
         onSearch(val);
       }
     }
   });
 
+  const inputEl = searchInput.input || searchInput;
+
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.className = "app-header__search-clear";
+  clearBtn.setAttribute("aria-label", "Clear search");
+  clearBtn.title = "Clear search";
+  clearBtn.appendChild(Icon("close", 13));
+  clearBtn.addEventListener("click", () => {
+    inputEl.value = "";
+    syncSearchControls("");
+    if (typeof onSearch === "function") {
+      onSearch("");
+    }
+    inputEl.focus();
+  });
+
   const shortcutHint = document.createElement("kbd");
   shortcutHint.className = "app-header__shortcut";
   shortcutHint.textContent = "/";
   shortcutHint.setAttribute("aria-hidden", "true");
+
+  function syncSearchControls(val) {
+    const hasText = Boolean(val && String(val).length > 0);
+    clearBtn.classList.toggle("ui-hidden", !hasText);
+    shortcutHint.classList.toggle("ui-hidden", hasText);
+  }
+
+  searchInput.appendChild(clearBtn);
   searchInput.appendChild(shortcutHint);
+  syncSearchControls(initialQuery);
 
   // Global '/' keyboard shortcut to focus search input (guarded against open modals)
   window.addEventListener("keydown", (e) => {
@@ -81,7 +108,6 @@ export function Header({ onSearch, initialQuery = "" } = {}) {
       activeTag !== "SELECT"
     ) {
       e.preventDefault();
-      const inputEl = searchInput.input || searchInput;
       inputEl.focus();
       inputEl.select();
     }
@@ -135,8 +161,9 @@ export function Header({ onSearch, initialQuery = "" } = {}) {
 
   header.appendChild(inner);
 
-  // Expose search input element for syncing/resetting
-  header.searchInput = searchInput.input || searchInput;
+  // Expose search input element and UI sync helper
+  header.searchInput = inputEl;
+  header.syncSearchUi = () => syncSearchControls(inputEl.value);
 
   return header;
 }

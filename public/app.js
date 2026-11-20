@@ -26,9 +26,11 @@ async function bootstrap() {
   // Application State
   let loadedApps = [];
   let isLoadingCatalog = true;
+  let catalogError = "";
   const initialParams = new URLSearchParams(window.location.search);
   let currentSearchQuery = initialParams.get("q") || "";
   let activeAccessFilter = "all";
+  let activeSort = "name-asc";
   let searchDebounceTimer = null;
   let activeViewCleanup = null;
   const initialRoute = getCurrentRoute();
@@ -91,6 +93,7 @@ async function bootstrap() {
     clearTimeout(searchDebounceTimer);
     currentSearchQuery = "";
     activeAccessFilter = "all";
+    activeSort = "name-asc";
     layout.resetSearch();
     const route = getCurrentRoute();
     if (route.view === "category") {
@@ -101,7 +104,44 @@ async function bootstrap() {
     }
   }
 
-  // 5. View Renderer
+  // 5. Catalog Loader (initial load + explicit user Retry on error)
+  async function loadCatalog(forceRefresh = false) {
+    isLoadingCatalog = true;
+    catalogError = "";
+    const currentRoute = getCurrentRoute();
+    if (currentRoute.view === "home" || currentRoute.view === "category") {
+      renderCurrentView(currentRoute);
+    }
+
+    try {
+      const catalogData = await fetchAppsCatalog(forceRefresh);
+      loadedApps = catalogData.apps || [];
+      isLoadingCatalog = false;
+      catalogError = "";
+
+      const { categories, counts, total } = computeCategoryCounts(loadedApps);
+      layout.updateCategories(categories, counts, total);
+
+      // Re-render home/category once catalog resolves; leave in-progress detail/cli views undisturbed
+      const activeRoute = getCurrentRoute();
+      if (activeRoute.view === "home" || activeRoute.view === "category") {
+        renderCurrentView(activeRoute);
+      } else {
+        updateDocumentTitle(activeRoute);
+      }
+    } catch (err) {
+      console.error("[Catalog Load Error]", err);
+      isLoadingCatalog = false;
+      catalogError = err?.message || "Failed to load apps catalog";
+      toast.error(catalogError);
+      const activeRoute = getCurrentRoute();
+      if (activeRoute.view === "home" || activeRoute.view === "category") {
+        renderCurrentView(activeRoute);
+      }
+    }
+  }
+
+  // 6. View Renderer
   function renderCurrentView(route) {
     if (typeof activeViewCleanup === "function") {
       try {
@@ -122,12 +162,19 @@ async function bootstrap() {
           route,
           searchQuery: currentSearchQuery,
           activeAccess: activeAccessFilter,
+          activeSort,
           isLoading: isLoadingCatalog,
+          errorMessage: catalogError,
           onAccessChange: (nextAccess) => {
             activeAccessFilter = nextAccess;
             renderCurrentView(getCurrentRoute());
           },
-          onResetFilters: resetAllFilters
+          onSortChange: (nextSort) => {
+            activeSort = nextSort;
+            renderCurrentView(getCurrentRoute());
+          },
+          onResetFilters: resetAllFilters,
+          onRetry: () => loadCatalog(true)
         });
         layout.viewRoot.appendChild(grid);
         break;
@@ -163,7 +210,7 @@ async function bootstrap() {
     }
   }
 
-  // 6. Subscribe to Route Changes (Browser Back/Forward & navigate calls)
+  // 7. Subscribe to Route Changes (Browser Back/Forward & navigate calls)
   onRouteChange((newRoute) => {
     clearTimeout(searchDebounceTimer);
     if (newRoute.view === "home" || newRoute.view === "category") {
@@ -173,39 +220,15 @@ async function bootstrap() {
     } else {
       currentSearchQuery = "";
       activeAccessFilter = "all";
+      activeSort = "name-asc";
       layout.resetSearch();
     }
     renderCurrentView(newRoute);
   });
 
-  // Render initial loading state immediately so first paint is never empty
+  // Render initial loading state immediately and fetch catalog
   renderCurrentView(initialRoute);
-
-  // 7. Fetch Catalog
-  try {
-    const catalogData = await fetchAppsCatalog();
-    loadedApps = catalogData.apps || [];
-    isLoadingCatalog = false;
-
-    const { categories, counts, total } = computeCategoryCounts(loadedApps);
-    layout.updateCategories(categories, counts, total);
-
-    // Re-render home/category once catalog resolves; leave in-progress detail/cli views undisturbed
-    const activeRoute = getCurrentRoute();
-    if (activeRoute.view === "home" || activeRoute.view === "category") {
-      renderCurrentView(activeRoute);
-    } else {
-      updateDocumentTitle(activeRoute);
-    }
-  } catch (err) {
-    console.error("[Catalog Load Error]", err);
-    isLoadingCatalog = false;
-    toast.error(err.message || "Failed to load apps catalog");
-    const activeRoute = getCurrentRoute();
-    if (activeRoute.view === "home" || activeRoute.view === "category") {
-      renderCurrentView(activeRoute);
-    }
-  }
+  await loadCatalog();
 }
 
 // Start application when DOM is ready

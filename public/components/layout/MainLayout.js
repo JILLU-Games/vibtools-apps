@@ -51,11 +51,13 @@ export function MainLayout({ initialRoute, initialCategories, initialQuery = "",
     resetSearch() {
       if (header.searchInput) {
         header.searchInput.value = "";
+        if (typeof header.syncSearchUi === "function") header.syncSearchUi();
       }
     },
     setSearchValue(value) {
       if (header.searchInput) {
         header.searchInput.value = value || "";
+        if (typeof header.syncSearchUi === "function") header.syncSearchUi();
       }
     }
   };
