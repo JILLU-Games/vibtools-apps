@@ -2,7 +2,7 @@
  * Service Worker for apps.vib.tools (PWA & Offline Shell).
  */
 
-const CACHE_NAME = "vib-apps-hub-v3";
+const CACHE_NAME = "vib-apps-hub-v7";
 
 const STATIC_ASSETS = [
   "/",
@@ -65,6 +65,8 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (!url.protocol.startsWith("http")) return;
+  // Never intercept cross-origin requests (e.g., Google Fonts, jsDelivr CDN)
+  if (url.origin !== self.location.origin) return;
 
   // 1. API requests -> Network First (Never cache API errors)
   if (url.pathname.startsWith("/api/")) {
@@ -90,7 +92,25 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 3. Static Assets -> Stale While Revalidate
+  // 3. CSS & JS modules -> Network First so UI/font updates apply immediately on reload
+  if (url.pathname.endsWith(".css") || url.pathname.endsWith(".js")) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // 4. Other Static Assets (icons, manifest) -> Stale While Revalidate
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request)

@@ -294,3 +294,17 @@ export async function onRequestOptions(context) {
     }
   });
 }
+
+/**
+ * Handles HEAD requests for /api/apps on Cloudflare Pages Functions.
+ * @param {EventContext} context
+ * @returns {Promise<Response>}
+ */
+export async function onRequestHead(context) {
+  const res = await onRequestGet(context);
+  return new Response(null, {
+    status: res.status,
+    headers: res.headers
+  });
+}
+

@@ -16,6 +16,8 @@ import {
 } from "./functions/_lib/github.js";
 import { isTrustedDownloadUrl } from "./functions/[[path]].js";
 import { onRequestGet as appsApiGet, onRequestOptions as appsApiOptions } from "./functions/api/apps.js";
+import { buildRouteSeoMetadata, injectSeoIntoHtml } from "./functions/_lib/seo.js";
+import { escapeXml } from "./functions/sitemap.xml.js";
 
 /**
  * Helper to execute an async test against the real GitHub auto-collection pipeline
@@ -108,7 +110,10 @@ test("Pure Repo-Only & Wrangler 3 invariant: mockData.js deleted, registry.json 
   for (const relPath of [
     "functions/_lib/github.js",
     "functions/_lib/registry.js",
+    "functions/_lib/seo.js",
     "functions/api/apps.js",
+    "functions/sitemap.xml.js",
+    "functions/llms.txt.js",
     "functions/[[path]].js"
   ]) {
     const src = fs.readFileSync(path.join(process.cwd(), relPath), "utf8");
@@ -171,13 +176,17 @@ test("Live Repo Auto-Collection: GET /api/apps and Mode B fetch config and docs 
 });
 
 test("SPA routes on apps.vib.tools return index.html with 200 OK", async () => {
-  const req = new Request("http://localhost:3000/app/calgrid", {
-    headers: { Accept: "text/html" }
+  await withMockedGitHubRepo(async (testEnv) => {
+    for (const spaPath of ["/cli", "/app/calgrid"]) {
+      const req = new Request(`http://localhost:3000${spaPath}`, {
+        headers: { Accept: "text/html" }
+      });
+      const res = await handleEdgeRequest(req, testEnv);
+      assert.equal(res.status, 200, `${spaPath} should return 200 OK`);
+      const html = await res.text();
+      assert.ok(html.includes("<div id=\"app\"></div>"));
+    }
   });
-  const res = await handleEdgeRequest(req);
-  assert.equal(res.status, 200);
-  const html = await res.text();
-  assert.ok(html.includes("<div id=\"app\"></div>"));
 });
 
 test("CLI installer route on get.vib.tools streams repo PowerShell script with injected vars and semver + metadata", async () => {
@@ -297,11 +306,17 @@ test("BUG-05: get.vib.tools rejects invalid/traversal slugs with 400 and prototy
 });
 
 test("BUG-07: SPA fallback emits single clean Content-Type: text/html; charset=utf-8 header", async () => {
-  const res = await handleEdgeRequest(
+  const cliRes = await handleEdgeRequest(
+    new Request("http://localhost:3000/cli", { headers: { Accept: "text/html" } })
+  );
+  assert.equal(cliRes.status, 200);
+  assert.equal(cliRes.headers.get("content-type"), "text/html; charset=utf-8");
+
+  const missingAppRes = await handleEdgeRequest(
     new Request("http://localhost:3000/app/calgrid", { headers: { Accept: "text/html" } })
   );
-  assert.equal(res.status, 200);
-  assert.equal(res.headers.get("content-type"), "text/html; charset=utf-8");
+  assert.equal(missingAppRes.status, 404);
+  assert.equal(missingAppRes.headers.get("content-type"), "text/html; charset=utf-8");
 });
 
 test("BUG-08: Browser visiting get.vib.tools/<slug>/<version> redirects 302 to storefront while CLI & /dl/ remain intact", async () => {
@@ -349,18 +364,27 @@ test("BUG-09: /api/apps is isolated from get.vib.tools (GET and OPTIONS return 4
   assert.equal(localModeGetRes.status, 404);
 });
 
-test("BUG-10: Dot-containing SPA routes return 200 HTML shell while real missing static assets return 404", async () => {
-  for (const spaPath of ["/category/Node.js", "/category/.NET", "/app/my.app"]) {
+test("BUG-10: Dot-containing SPA routes return HTML shell while real missing static assets return plain 404", async () => {
+  for (const spaPath of ["/category/Node.js", "/category/.NET"]) {
     const res = await handleEdgeRequest(
       new Request(`http://localhost:3000${spaPath}`, { headers: { Accept: "text/html" } })
     );
-    assert.equal(res.status, 200, `${spaPath} should serve SPA shell`);
+    assert.equal(res.status, 200, `${spaPath} should serve 200 SPA shell`);
     assert.equal(res.headers.get("content-type"), "text/html; charset=utf-8");
   }
+
+  // Dot-containing unregistered app slug returns strict 404 HTML shell (not treated as missing static asset)
+  const dotAppRes = await handleEdgeRequest(
+    new Request("http://localhost:3000/app/my.app", { headers: { Accept: "text/html" } })
+  );
+  assert.equal(dotAppRes.status, 404);
+  assert.equal(dotAppRes.headers.get("content-type"), "text/html; charset=utf-8");
+  assert.ok((await dotAppRes.text()).includes("<div id=\"app\"></div>"));
 
   for (const missingAsset of ["/missing-script.js", "/assets/nonexistent.png", "/styles.css"]) {
     const res = await handleEdgeRequest(new Request(`http://localhost:3000${missingAsset}`));
     assert.equal(res.status, 404, `${missingAsset} should return 404`);
+    assert.equal(res.headers.get("content-type"), "text/plain; charset=utf-8");
   }
 });
 
@@ -404,13 +428,14 @@ test("BUG-13: Non-runtime assets removed from public/ and Modal.js primitive ret
   assert.equal(fs.existsSync(path.join(process.cwd(), "public/components/ui/Modal.js")), true);
 });
 
-test("BUG-17: Service worker uses vib-apps-hub-v3, precaches all existing manifest icons, and guards non-GET/non-HTTP fetches", () => {
+test("BUG-17: Service worker uses vib-apps-hub-v7, skips cross-origin fonts/CDNs, precaches all existing manifest icons, and guards non-GET/non-HTTP fetches", () => {
   const swSource = fs.readFileSync(path.join(process.cwd(), "public/sw.js"), "utf8");
   const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "public/manifest.json"), "utf8"));
 
-  assert.ok(swSource.includes('const CACHE_NAME = "vib-apps-hub-v3"'));
+  assert.ok(swSource.includes('const CACHE_NAME = "vib-apps-hub-v7"'));
   assert.ok(swSource.includes('if (event.request.method !== "GET") return;'));
   assert.ok(swSource.includes('if (!url.protocol.startsWith("http")) return;'));
+  assert.ok(swSource.includes('if (url.origin !== self.location.origin) return;'));
 
   const assetsMatch = swSource.match(/const STATIC_ASSETS = \[([\s\S]*?)\];/);
   assert.ok(assetsMatch, "STATIC_ASSETS array must exist in public/sw.js");
@@ -967,5 +992,256 @@ test("Forensic Pass 3: rejects malformed https:// URLs, supports multi-branch re
     assert.equal(spaRes.headers.get("content-type"), "text/html; charset=utf-8");
   }
 });
+
+// --- Cycle 3 Regression Suite (SEO-01 through SEO-08 & ERR-SEO-01 through ERR-SEO-09) ---
+
+test("Cycle 3 SEO-01 & SEO-02: Edge injects per-route title, canonical, OG/Twitter, and Schema.org JSON-LD across all storefront routes", async () => {
+  await withMockedGitHubRepo(async (testEnv) => {
+    const cases = [
+      {
+        path: "/",
+        title: "Vib Apps — Apps Catalog &amp; Edge Installer",
+        canonical: "https://apps.vib.tools/",
+        ldTypes: ["WebSite", "WebApplication"]
+      },
+      {
+        path: "/cli",
+        title: "CLI Installer Guide — Vib Apps",
+        canonical: "https://apps.vib.tools/cli",
+        ldTypes: ["TechArticle", "BreadcrumbList"]
+      },
+      {
+        path: "/schema",
+        title: "Vib Apps Engine — Frozen Schema (v1) &amp; AI Docs — Vib Apps",
+        canonical: "https://apps.vib.tools/schema",
+        ldTypes: ["TechArticle", "BreadcrumbList"]
+      },
+      {
+        path: "/vib-apps-engine",
+        title: "Vib Apps Engine — Frozen Schema (v1) &amp; AI Docs — Vib Apps",
+        canonical: "https://apps.vib.tools/schema",
+        ldTypes: ["TechArticle", "BreadcrumbList"]
+      },
+      {
+        path: "/category/Productivity",
+        title: "Productivity Applications — Vib Apps",
+        canonical: "https://apps.vib.tools/category/productivity",
+        ldTypes: ["CollectionPage", "BreadcrumbList"]
+      },
+      {
+        path: "/app/calgrid",
+        title: "CalGrid (v1.0.3) — Vib Apps",
+        canonical: "https://apps.vib.tools/app/calgrid",
+        ldTypes: ["SoftwareApplication", "BreadcrumbList"],
+        customIcon: "https://dl.vib.tools/calgrid/icon.png"
+      }
+    ];
+
+    for (const c of cases) {
+      const res = await handleEdgeRequest(
+        new Request(`http://localhost:3000${c.path}`, { headers: { Accept: "text/html" } }),
+        testEnv
+      );
+      assert.equal(res.status, 200, `${c.path} should return 200`);
+      const html = await res.text();
+      assert.ok(html.includes(`<title>${c.title}</title>`), `${c.path} title mismatch`);
+      assert.ok(html.includes(`<link rel="canonical" href="${c.canonical}">`), `${c.path} canonical mismatch`);
+      assert.ok(html.includes('<meta name="robots" content="index, follow">'), `${c.path} robots mismatch`);
+      assert.ok(html.includes('<meta name="theme-color" content="#0d1117">'), `${c.path} theme-color missing`);
+
+      const ldMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+      assert.ok(ldMatch, `${c.path} JSON-LD missing`);
+      const ld = JSON.parse(ldMatch[1]);
+      assert.deepEqual(
+        ld["@graph"].map((n) => n["@type"]),
+        c.ldTypes,
+        `${c.path} JSON-LD @graph mismatch`
+      );
+
+      if (c.customIcon) {
+        assert.ok(html.includes(`<meta property="og:image" content="${c.customIcon}">`));
+        assert.equal(html.includes('property="og:image:width"'), false, "custom icon should strip fixed 1200x630 width");
+        assert.equal(html.includes('property="og:image:height"'), false, "custom icon should strip fixed 1200x630 height");
+        assert.equal(ld["@graph"][0].softwareVersion, "v1.0.3");
+        assert.equal(ld["@graph"][0].downloadUrl, "https://get.vib.tools/dl/calgrid");
+      }
+    }
+  });
+});
+
+test("Cycle 3 SEO-04 & ERR-SEO-03: Semantic <noscript> crawler fallback and XSS/$-token escaping across head, JSON-LD, and noscript", async () => {
+  const indexHtml = fs.readFileSync(path.join(process.cwd(), "public/index.html"), "utf8");
+  const hostileMeta = buildRouteSeoMetadata("/app/calgrid", {
+    resolvedApp: {
+      entry: { slug: "calgrid" },
+      config: {
+        slug: "calgrid",
+        name: "CalGrid <Pro> $& $1",
+        tagline: "Fast </script><script>alert(1)</script> <img src=x onerror=alert(2)> $9.99",
+        category: "Productivity",
+        access: "Free",
+        platforms: ["Windows"],
+        latest: "1.0.3",
+        versions: {
+          "1.0.3": {
+            url: "https://dl.vib.tools/calgrid/v1.0.3/CalGrid.exe",
+            size: "42 MB",
+            sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            released_at: "2026-11-15"
+          }
+        }
+      }
+    }
+  });
+
+  const rewritten = injectSeoIntoHtml(indexHtml, hostileMeta);
+  assert.ok(rewritten.includes("<title>CalGrid &lt;Pro&gt; $&amp; $1 (v1.0.3) — Vib Apps</title>"));
+  assert.equal(rewritten.includes("<script>alert(1)</script>"), false);
+  assert.equal(rewritten.includes("<img src=x onerror=alert(2)>"), false);
+  assert.match(rewritten, /<div id="app"><\/div>\s*<noscript><main>/);
+  assert.ok(rewritten.includes("https://get.vib.tools/calgrid"));
+  assert.ok(rewritten.includes("https://get.vib.tools/dl/calgrid"));
+
+  const ldRaw = rewritten.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1];
+  assert.equal(/<\/script>/i.test(ldRaw), false, "JSON-LD must escape </script>");
+  assert.doesNotThrow(() => JSON.parse(ldRaw));
+});
+
+test("Cycle 3 SEO-05 & ERR-SEO-09: Unknown routes and unregistered /app/:slug return strict HTTP 404 + noindex + no-store; malformed URLs return 400", async () => {
+  for (const notFoundPath of ["/unknown-route", "/foo/bar", "/app/nonexistent", "/app/bad!slug"]) {
+    const res = await handleEdgeRequest(
+      new Request(`http://localhost:3000${notFoundPath}`, { headers: { Accept: "text/html" } })
+    );
+    assert.equal(res.status, 404, `${notFoundPath} must return strict HTTP 404`);
+    assert.equal(res.headers.get("Cache-Control"), "no-store");
+    assert.equal(res.headers.get("X-Robots-Tag"), "noindex, nofollow");
+    assert.equal(res.headers.get("Content-Type"), "text/html; charset=utf-8");
+    const html = await res.text();
+    assert.ok(html.includes('<meta name="robots" content="noindex, nofollow">'));
+    assert.match(html, /<noscript><main><h1>404 — /);
+  }
+
+  for (const malformedPath of ["/%E0%A4%A", "/category/%E0%A4%A", "/app/%E0%A4%A"]) {
+    const res = await handleEdgeRequest(new Request(`http://localhost:3000${malformedPath}`));
+    assert.equal(res.status, 400, `${malformedPath} must return 400 Bad Request`);
+  }
+});
+
+test("Cycle 3 SEO-06 & SEO-07: get.vib.tools attaches X-Robots-Tag: noindex, nofollow and HEAD parity works across all edge routes", async () => {
+  await withMockedGitHubRepo(async (testEnv) => {
+    const cliRoot = await handleEdgeRequest(new Request("http://localhost:3000/?mode=get"), testEnv);
+    assert.equal(cliRoot.status, 200);
+    assert.equal(cliRoot.headers.get("X-Robots-Tag"), "noindex, nofollow");
+
+    const cliScript = await handleEdgeRequest(new Request("http://localhost:3000/calgrid?mode=get"), testEnv);
+    assert.equal(cliScript.status, 200);
+    assert.equal(cliScript.headers.get("X-Robots-Tag"), "noindex, nofollow");
+
+    const dlRedirect = await handleEdgeRequest(new Request("http://localhost:3000/dl/calgrid?mode=get"), testEnv);
+    assert.equal(dlRedirect.status, 302);
+    assert.equal(dlRedirect.headers.get("X-Robots-Tag"), "noindex, nofollow");
+
+    const missingCli = await handleEdgeRequest(new Request("http://localhost:3000/missing?mode=get"), testEnv);
+    assert.equal(missingCli.status, 404);
+    assert.equal(missingCli.headers.get("X-Robots-Tag"), "noindex, nofollow");
+
+    for (const [route, expectedStatus] of [
+      ["/", 200],
+      ["/cli", 200],
+      ["/app/calgrid", 200],
+      ["/unknown-route", 404],
+      ["/sitemap.xml", 200],
+      ["/llms.txt", 200],
+      ["/?mode=get", 200]
+    ]) {
+      const headRes = await handleEdgeRequest(
+        new Request(`http://localhost:3000${route}`, { method: "HEAD" }),
+        testEnv
+      );
+      assert.equal(headRes.status, expectedStatus, `HEAD ${route} status mismatch`);
+      assert.equal(await headRes.text(), "", `HEAD ${route} must have empty body`);
+    }
+  });
+});
+
+test("Cycle 3 SEO-03 & SEO-08: Dynamic /sitemap.xml and /llms.txt list live apps, skip broken repos, escape XML, and isolate get.vib.tools", async () => {
+  // 1. Empty registry defaults
+  const emptySitemap = await handleEdgeRequest(new Request("http://localhost:3000/sitemap.xml"));
+  assert.equal(emptySitemap.status, 200);
+  assert.equal(emptySitemap.headers.get("Content-Type"), "application/xml; charset=utf-8");
+  const emptyXml = await emptySitemap.text();
+  assert.equal((emptyXml.match(/<url>/g) || []).length, 9);
+
+  const emptyLlms = await handleEdgeRequest(new Request("http://localhost:3000/llms.txt"));
+  assert.equal(emptyLlms.status, 200);
+  assert.equal(emptyLlms.headers.get("Access-Control-Allow-Origin"), "*");
+  assert.equal((await emptyLlms.text()).includes("## Published Applications"), false);
+
+  // 2. Live multi-repo with one healthy repo ("Audio & Video") + one broken repo skipped cleanly
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes("vib-tools/calgrid-seo") && u.includes("app.config.json")) {
+      return new Response(
+        JSON.stringify({
+          $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+          schemaVersion: 1,
+          slug: "calgrid",
+          name: "CalGrid",
+          tagline: "Fast calendar\nfor power users",
+          category: "Audio & Video",
+          access: "Free",
+          latest: "v1.0.3",
+          installer: { type: "powershell", script: ".vibtools/apps/installer.ps1" },
+          versions: {
+            "v1.0.3": {
+              url: "https://dl.vib.tools/calgrid/v1.0.3/CalGrid.exe",
+              released_at: "2026-11-15"
+            }
+          }
+        }),
+        { status: 200 }
+      );
+    }
+    return new Response("Not Found", { status: 404 });
+  };
+
+  try {
+    const testEnv = {
+      __REGISTRY_OVERRIDE: [
+        "https://github.com/vib-tools/calgrid-seo",
+        "https://github.com/vib-tools/broken-seo-repo"
+      ]
+    };
+
+    const liveSitemap = await handleEdgeRequest(new Request("http://localhost:3000/sitemap.xml"), testEnv);
+    assert.equal(liveSitemap.status, 200);
+    const liveXml = await liveSitemap.text();
+    assert.ok(liveXml.includes("<loc>https://apps.vib.tools/app/calgrid</loc>"));
+    assert.ok(liveXml.includes("<lastmod>2026-11-15</lastmod>"));
+    assert.ok(liveXml.includes("<loc>https://apps.vib.tools/category/audio%20%26%20video</loc>"));
+    assert.equal((liveXml.match(/<url>/g) || []).length, 11);
+    assert.equal(escapeXml(`a&b<c>d"e'f`), "a&amp;b&lt;c&gt;d&quot;e&apos;f");
+
+    const liveLlms = await handleEdgeRequest(new Request("http://localhost:3000/llms.txt"), testEnv);
+    assert.equal(liveLlms.status, 200);
+    assert.equal(liveLlms.headers.get("Access-Control-Allow-Origin"), "*");
+    const liveLlmsText = await liveLlms.text();
+    assert.ok(liveLlmsText.includes("## Published Applications"));
+    assert.ok(liveLlmsText.includes("[CalGrid (v1.0.3)](https://apps.vib.tools/app/calgrid)"));
+    assert.ok(liveLlmsText.includes('irm "https://get.vib.tools/calgrid" | iex'));
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+
+  // 3. Domain isolation on get.vib.tools
+  for (const isolatedPath of ["/sitemap.xml?mode=get", "/llms.txt?mode=get"]) {
+    const res = await handleEdgeRequest(new Request(`http://localhost:3000${isolatedPath}`));
+    assert.equal(res.status, 404);
+    assert.equal(res.headers.get("X-Robots-Tag"), "noindex, nofollow");
+    assert.equal(res.headers.get("Cache-Control"), "no-store");
+  }
+});
+
 
 

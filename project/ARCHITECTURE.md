@@ -30,11 +30,16 @@ To eliminate build overhead, toolchain rot, and dependency sprawl, `vib-apps-hub
 - **Edge Routing Mechanism:**  
   `functions/[[path]].js` intercepts every incoming request, inspects the `Host` header via `request.headers.get("host")`, and dispatches handling:
   - If `Host` matches `get.vib.tools` (or local testing alias):
-    - Routes `/dl/<slug>` and `/dl/<slug>/<version>` to 302 redirect handlers targeting Cloudflare R2 download URLs.
-    - Routes `/<slug>` and `/<slug>/<version>` to the dynamic PowerShell installer script streamer.
-    - Returns `404 Not Found` or simple plaintext usage manual for root `/`.
+    - Routes `/dl/<slug>` and `/dl/<slug>/<version>` to 302 redirect handlers targeting Cloudflare R2 download URLs (with `X-Robots-Tag: noindex, nofollow`).
+    - Routes `/<slug>` and `/<slug>/<version>` to the dynamic PowerShell installer script streamer (with `X-Robots-Tag: noindex, nofollow`).
+    - Returns `404 Not Found` or simple plaintext usage manual for root `/` (with `X-Robots-Tag: noindex, nofollow`).
   - If `Host` matches `apps.vib.tools`:
     - Static assets from `public/` are served by Pages CDN.
+    - Storefront HTML routes (`/`, `/cli`, `/schema`, `/vib-apps-engine`, `/category/:name`, `/app/:slug`) are rewritten at the edge via `functions/_lib/seo.js` to inject XSS-safe route-specific `<title>`, `<meta name="description">`, `<meta name="robots">`, `<link rel="canonical">`, OpenGraph/Twitter tags, Schema.org JSON-LD (`WebSite` + `WebApplication`, `SoftwareApplication` + `BreadcrumbList`, `CollectionPage`, `TechArticle`), and semantic `<noscript>` summaries for non-JS crawlers.
+    - Unknown storefront paths and unregistered `/app/:slug` routes return strict HTTP **`404 Not Found`** with `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`, and `<meta name="robots" content="noindex, nofollow">` while still serving the SPA shell for human browsers.
+    - `functions/[[path]].js` exports both `onRequestGet` and `onRequestHead` for full HTTP `HEAD` parity across both domains.
+    - `/sitemap.xml` is served dynamically by `functions/sitemap.xml.js` (canonical static pages + live `/app/<slug>` with `<lastmod>` + deduplicated `/category/<name>`, 300s Edge Cache when non-empty, `404` on `get.vib.tools`).
+    - `/llms.txt` is served dynamically by `functions/llms.txt.js` (CORS `*`, canonical spec index + auto-appended `## Published Applications` when live apps exist, `404` on `get.vib.tools`).
     - `/api/apps` is routed to `functions/api/apps.js` returning JSON metadata aggregated from registered apps.
 
 ---
@@ -61,9 +66,13 @@ apps.vib.tools/
 │   ├── app.js                     # Vanilla JavaScript client controller
 │   └── styles.css                 # Custom CSS variables & overrides
 ├── functions/                     # Cloudflare Pages Functions (Edge API)
-│   ├── [[path]].js                # Wildcard host and route dispatcher
+│   ├── [[path]].js                # Wildcard host, SPA fallback, Edge SEO injector & get.vib.tools router
+│   ├── sitemap.xml.js             # Dynamic Edge XML sitemap (static + live apps + categories, HEAD parity)
+│   ├── llms.txt.js                # Dynamic AI discovery index (CORS *, static specs + live Published Applications)
 │   ├── _lib/                      # Private internal utilities
-│   │   └── github.js              # GitHub REST API client, Frozen v1 validator & cache layer
+│   │   ├── github.js              # GitHub REST API client, Frozen v1 validator & cache layer
+│   │   ├── registry.js            # Auto-generated Wrangler-3-safe ES module mirror of registry.json
+│   │   └── seo.js                 # XSS-safe per-route SEO meta, OG/Twitter, JSON-LD & <noscript> engine
 │   └── api/                       # REST endpoints
 │       └── apps.js                # Aggregator for app catalogue metadata
 ├── project/                       # Internal technical specifications & logs

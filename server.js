@@ -7,7 +7,18 @@ import {
   onRequestGet as apiAppsGet,
   onRequestOptions as apiAppsOptions
 } from "./functions/api/apps.js";
-import { onRequestGet as wildcardGet } from "./functions/[[path]].js";
+import {
+  onRequestGet as sitemapGet,
+  onRequestHead as sitemapHead
+} from "./functions/sitemap.xml.js";
+import {
+  onRequestGet as llmsGet,
+  onRequestHead as llmsHead
+} from "./functions/llms.txt.js";
+import {
+  onRequestGet as wildcardGet,
+  onRequestHead as wildcardHead
+} from "./functions/[[path]].js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -163,7 +174,7 @@ export async function handleEdgeRequest(webRequest, envOverrides = {}) {
     });
   }
 
-  // Enforce read-only GET/HEAD parity with Cloudflare Pages onRequestGet handler
+  // Enforce read-only GET/HEAD parity with Cloudflare Pages Functions handlers
   if (webRequest.method !== "GET" && webRequest.method !== "HEAD") {
     return new Response("Method Not Allowed\n", {
       status: 405,
@@ -174,8 +185,18 @@ export async function handleEdgeRequest(webRequest, envOverrides = {}) {
     });
   }
 
+  // Route /sitemap.xml to functions/sitemap.xml.js
+  if (url.pathname === "/sitemap.xml") {
+    return webRequest.method === "HEAD" ? await sitemapHead(context) : await sitemapGet(context);
+  }
+
+  // Route /llms.txt to functions/llms.txt.js
+  if (url.pathname === "/llms.txt") {
+    return webRequest.method === "HEAD" ? await llmsHead(context) : await llmsGet(context);
+  }
+
   // All other GET/HEAD routes pass through functions/[[path]].js wildcard handler
-  return await wildcardGet(context);
+  return webRequest.method === "HEAD" ? await wildcardHead(context) : await wildcardGet(context);
 }
 
 /**

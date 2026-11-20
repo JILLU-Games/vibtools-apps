@@ -1,6 +1,6 @@
 # Notes Manifest (`notes/MINIFEST.md`)
 
-> **Last Updated:** 2026-11-19  
+> **Last Updated:** 2026-11-20  
 > **Directory Scope:** Development-time notes, baseline freezes, plans, and phase progression logs. (Mirrors `notes/MANIFEST.md`).
 
 ---
@@ -41,3 +41,10 @@
 | `planning/feature_readiness_ledger.md` | File | Complete / Cycle 2 | ২০/২০ ফিচার একচুয়াল ওয়ার্কিং স্ট্যাটাস লেজার রেকর্ড (Phase 1–4 সম্পন্ন, ০ কোড বাগ অবশিষ্ট)। |
 | `phases/phase_tracker.md` | File | Complete / Cycle 2 Tracker | Cycle 2 আপডেট ফেজ ট্র্যাকার (৪/৪ সম্পন্ন — ১৮/১৮ বাগ ক্লোজড), কমপ্লিশন লগ, স্কোপ লক প্রটোকল ও Cycle 1 আর্কাইভ। |
 | `vibtools_schema_forensic_audit.md` | File | Active / Verified | Frozen `.vibtools/apps/app.config.json` স্কিমা (v1), রেন্টাইম ভ্যালিডেশন প্যারিটি, Repo URL অটো-কালেকশন পাইপলাইন ও AI/SEO ডক্সের সম্পূর্ণ ফরেনসিক অডিট ও ফিক্স রিপোর্ট। |
+| `planning/cycle3/` | Directory | Active / Cycle 3 | Cycle 3 (Production SEO, Edge Meta/SSR, Dynamic Sitemap, Soft-404 Hardening & AI Indexing) বেসলাইন ফ্রিজ ও প্ল্যানিং ডকুমেন্টস। |
+| `planning/cycle3/00_baseline_freeze_v3.md` | File | Active / Frozen v3.0 | Baseline v3.0 ফ্রিজ স্ন্যাপশট, প্রোটেক্টেড ইনভ্যারিয়্যান্টস ও Cycle 3 ফরেনসিক অ্যালাইনমেন্ট ম্যাট্রিক্স। |
+| `planning/cycle3/01_forensic_audit_report.md` | File | Active / Cycle 3 | `SEO-01` থেকে `SEO-08` পর্যন্ত সম্পূর্ণ ফরেনসিক SEO ও AI Indexing অডিট রিপোর্ট এবং ফেজ স্কোপ লক। |
+| `planning/cycle3/02_phased_roadmap.md` | File | Active / Cycle 3 | Cycle 3-এর A–Z ৪-ফেজ প্রোডাকশন রোডম্যাপ, ডিপেন্ডেন্সি গ্রাফ, এক্সিট গেট ও স্কোপ লক স্পেসিফিকেশন। |
+| `planning/cycle3/03_error_handling_matrix.md` | File | Active / Cycle 3 | বেসলাইন v3.0 এরর হ্যান্ডলিং ইনভেন্টরি এবং Cycle 3-এ যোগ হওয়া ৯টি নতুন এরর-হ্যান্ডলিং কন্ট্রাক্ট। |
+| `planning/cycle3/04_actual_implementation_ledger.md` | File | Active / Cycle 3 | বর্তমানে ১২টি একচুয়াল ওয়ার্কিং ফিচার, প্রতি ফেজ পর যুক্ত হওয়া ফিচার ও বাকি ফিচারের লাইভ লেজার। |
+| `phases/cycle3_phase_tracker.md` | File | Active / Cycle 3 (0/4) | Cycle 3 আপডেট ফেজ কমপ্লিশন লগ, সম্পন্ন বনাম বাকি ফেজ এবং কঠোর স্কোপ লক প্রটোকল। |

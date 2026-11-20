@@ -1,3 +1,5 @@
+import { navigate } from "../../lib/router.js";
+
 /**
  * Minimal compact Footer component.
  *
@@ -31,8 +33,7 @@ export function Footer() {
   right.className = "app-footer__links";
 
   const footerLinks = [
-    { label: "Schema & AI Docs", href: "/schema", external: false },
-    { label: "llms-full.txt", href: "/llms-full.txt", external: true },
+    { label: "Developers", href: "/schema", external: false },
     { label: "vib.tools", href: "https://vib.tools", external: true },
     { label: "docs.vib.tools", href: "https://docs.vib.tools", external: true },
     { label: "get.vib.tools", href: "https://get.vib.tools", external: true }
@@ -45,6 +46,11 @@ export function Footer() {
     if (item.external) {
       link.target = "_blank";
       link.rel = "noopener noreferrer";
+    } else {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        navigate(item.href);
+      });
     }
     right.appendChild(link);
   });

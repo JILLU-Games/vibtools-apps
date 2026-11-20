@@ -4,6 +4,11 @@ import {
   fetchAppInstaller,
   isTrustedDownloadUrl
 } from "./_lib/github.js";
+import {
+  parseStorefrontSeoRoute,
+  buildRouteSeoMetadata,
+  injectSeoIntoHtml
+} from "./_lib/seo.js";
 
 export { isTrustedDownloadUrl };
 
@@ -75,11 +80,62 @@ export async function onRequestGet(context) {
 
   // If request is for apps.vib.tools (or default frontend dev server), handle static assets & SPA fallback
   if (!isGetDomain) {
+    const pathname = url.pathname;
+    const seoRoute = parseStorefrontSeoRoute(pathname);
+    if (seoRoute.malformed) {
+      return new Response("Bad Request: Malformed URL encoding.\n", {
+        status: 400,
+        headers: { "Content-Type": "text/plain; charset=utf-8" }
+      });
+    }
+
     const res = await context.next();
 
-    // Guarantee reload-safe SPA routing: If asset is 404 and is an SPA route, serve /index.html with 200 OK
+    // Helper to inject per-route SEO meta, canonical URL, OG/Twitter tags & JSON-LD
+    const rewriteStorefrontHtml = async (sourceRes) => {
+      let resolvedApp = null;
+      if (seoRoute.type === "app" && seoRoute.slug && isValidSlug(seoRoute.slug)) {
+        try {
+          resolvedApp = await resolveAppBySlug(seoRoute.slug, env, context);
+        } catch (_) {
+          resolvedApp = null;
+        }
+      }
+      const rawHtml = await sourceRes.text();
+      let rewrittenHtml = rawHtml;
+      let status = 200;
+      let isNotFound = false;
+      try {
+        const seoMeta = buildRouteSeoMetadata(pathname, { resolvedApp });
+        status = seoMeta.httpStatus || 200;
+        isNotFound = status === 404;
+        rewrittenHtml = injectSeoIntoHtml(rawHtml, seoMeta);
+      } catch (_) {
+        rewrittenHtml = rawHtml;
+      }
+      const spaHeaders = new Headers(sourceRes.headers);
+      spaHeaders.set("Content-Type", "text/html; charset=utf-8");
+      spaHeaders.delete("Content-Length");
+      if (isNotFound) {
+        spaHeaders.set("Cache-Control", "no-store");
+        spaHeaders.set("X-Robots-Tag", "noindex, nofollow");
+      }
+      return new Response(rewrittenHtml, {
+        status,
+        headers: spaHeaders
+      });
+    };
+
+    // Rewrite homepage HTML (/) so WebSite SearchAction + WebApplication JSON-LD stays in sync
+    if (res.status === 200 && seoRoute.type === "home") {
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      if (ct.includes("text/html")) {
+        return await rewriteStorefrontHtml(res);
+      }
+    }
+
+    // Guarantee reload-safe SPA routing with dynamic Edge SEO meta injection
     if (res.status === 404) {
-      const pathname = url.pathname;
       const isApi = pathname === "/api" || pathname.startsWith("/api/");
       const isKnownSpaRoute =
         pathname === "/cli" ||
@@ -93,12 +149,7 @@ export async function onRequestGet(context) {
         const indexUrl = new URL("/index.html", request.url);
         const indexRes = await env.ASSETS.fetch(indexUrl);
         if (indexRes && (indexRes.status === 200 || indexRes.ok)) {
-          const spaHeaders = new Headers(indexRes.headers);
-          spaHeaders.set("Content-Type", "text/html; charset=utf-8");
-          return new Response(indexRes.body, {
-            status: 200,
-            headers: spaHeaders
-          });
+          return await rewriteStorefrontHtml(indexRes);
         }
       }
     }
@@ -125,6 +176,17 @@ export async function onRequestGet(context) {
     return res;
   }
 
+  // Helper for get.vib.tools plain-text responses (always non-indexable by search engines)
+  const getDomainText = (body, status, extraHeaders = {}) =>
+    new Response(body, {
+      status,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Robots-Tag": "noindex, nofollow",
+        ...extraHeaders
+      }
+    });
+
   // Parse path segments from pathname safely (prevent uncaught URIError 500)
   const cleanPath = url.pathname.replace(/^\/+|\/+$/g, "");
   let segments = [];
@@ -132,10 +194,7 @@ export async function onRequestGet(context) {
     try {
       segments = cleanPath.split("/").map((s) => decodeURIComponent(s).trim());
     } catch (_) {
-      return new Response("Bad Request: Malformed URL encoding.\n", {
-        status: 400,
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
-      });
+      return getDomainText("Bad Request: Malformed URL encoding.\n", 400);
     }
   }
 
@@ -152,10 +211,7 @@ export async function onRequestGet(context) {
     }
     if ((segments.length === 1 || segments.length === 2) && segments[0] !== "dl") {
       if (!isValidSlug(segments[0])) {
-        return new Response("Invalid app slug format.\n", {
-          status: 400,
-          headers: { "Content-Type": "text/plain; charset=utf-8" }
-        });
+        return getDomainText("Invalid app slug format.\n", 400);
       }
       return Response.redirect(`https://apps.vib.tools/app/${encodeURIComponent(segments[0])}`, 302);
     }
@@ -184,13 +240,7 @@ export async function onRequestGet(context) {
       ""
     ].join("\n");
 
-    return new Response(usage, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "public, max-age=3600"
-      }
-    });
+    return getDomainText(usage, 200, { "Cache-Control": "public, max-age=3600" });
   }
 
   // =========================================================================
@@ -198,48 +248,33 @@ export async function onRequestGet(context) {
   // =========================================================================
   if (segments[0] === "dl") {
     if (segments.length > 3) {
-      return new Response("Not Found\n", {
-        status: 404,
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
-      });
+      return getDomainText("Not Found\n", 404);
     }
 
     const slug = segments[1];
     const requestedVersion = segments[2] || null;
 
     if (!slug) {
-      return new Response("Missing app slug in download path. Usage: /dl/<slug>[/<version>]\n", {
-        status: 400,
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
-      });
+      return getDomainText("Missing app slug in download path. Usage: /dl/<slug>[/<version>]\n", 400);
     }
 
     if (!isValidSlug(slug)) {
-      return new Response("Invalid app slug format. Usage: /dl/<slug>[/<version>]\n", {
-        status: 400,
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
-      });
+      return getDomainText("Invalid app slug format. Usage: /dl/<slug>[/<version>]\n", 400);
     }
 
     const resolvedApp = await resolveAppBySlug(slug, env, context);
     const config = resolvedApp?.config || null;
 
     if (!config) {
-      return new Response(`App '${slug}' was not found in registry.\n`, {
-        status: 404,
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
-      });
+      return getDomainText(`App '${slug}' was not found in registry.\n`, 404);
     }
 
     // Resolve version object with automatic 'v' prefix normalization (v1.0.3 <-> 1.0.3)
     const resolved = resolveVersion(config.versions, requestedVersion, config.latest);
     if (!resolved || !resolved.versionData?.url) {
-      return new Response(
+      return getDomainText(
         `Version '${requestedVersion || config.latest}' or verified download URL not found for app '${slug}'.\n`,
-        {
-          status: 404,
-          headers: { "Content-Type": "text/plain; charset=utf-8" }
-        }
+        404
       );
     }
 
@@ -247,16 +282,16 @@ export async function onRequestGet(context) {
 
     // Validate that download URL is a syntactically valid HTTPS endpoint on a trusted storage host
     if (!isTrustedDownloadUrl(downloadUrl, env)) {
-      return new Response(
-        `Untrusted or invalid download URL configured for app '${slug}'.\n`,
-        {
-          status: 403,
-          headers: { "Content-Type": "text/plain; charset=utf-8" }
-        }
-      );
+      return getDomainText(`Untrusted or invalid download URL configured for app '${slug}'.\n`, 403);
     }
 
-    return Response.redirect(downloadUrl, 302);
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: downloadUrl,
+        "X-Robots-Tag": "noindex, nofollow"
+      }
+    });
   }
 
   // =========================================================================
@@ -267,18 +302,12 @@ export async function onRequestGet(context) {
     const requestedVersion = segments[1] || null;
 
     if (!isValidSlug(slug)) {
-      return new Response("Invalid app slug format.\n", {
-        status: 400,
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
-      });
+      return getDomainText("Invalid app slug format.\n", 400);
     }
 
     const resolvedApp = await resolveAppBySlug(slug, env, context);
     if (!resolvedApp) {
-      return new Response(`App '${slug}' was not found in registry.\n`, {
-        status: 404,
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
-      });
+      return getDomainText(`App '${slug}' was not found in registry.\n`, 404);
     }
 
     const entry = resolvedApp.entry;
@@ -288,12 +317,9 @@ export async function onRequestGet(context) {
     // Resolve target version (latest or explicit) BEFORE loading installer so per-version overrides apply
     const resolvedVer = resolveVersion(config.versions, requestedVersion, config.latest);
     if (!resolvedVer) {
-      return new Response(
+      return getDomainText(
         `Version '${requestedVersion || config.latest}' not found for app '${slug}'.\n`,
-        {
-          status: 404,
-          headers: { "Content-Type": "text/plain; charset=utf-8" }
-        }
+        404
       );
     }
 
@@ -305,17 +331,11 @@ export async function onRequestGet(context) {
     if (instRes.ok) {
       installerScript = instRes.script;
     } else if (instRes.status === 403) {
-      return new Response(`Untrusted or invalid installer URL configured for app '${slug}'.\n`, {
-        status: 403,
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
-      });
+      return getDomainText(`Untrusted or invalid installer URL configured for app '${slug}'.\n`, 403);
     }
 
     if (!installerScript) {
-      return new Response(`Failed to load installer script for '${slug}'.\n`, {
-        status: 502,
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
-      });
+      return getDomainText(`Failed to load installer script for '${slug}'.\n`, 502);
     }
 
     // Sanitize canonical slug, targetVersion (preserving valid semver '+' build metadata), and appName
@@ -326,21 +346,35 @@ export async function onRequestGet(context) {
     const injectedHeader = `$APP_SLUG = "${safeSlug}"\r\n$APP_VERSION = "${safeVersion}"\r\n$APP_NAME = "${safeName}"\r\n\r\n`;
     const fullScript = injectedHeader + installerScript;
 
-    return new Response(fullScript, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "public, max-age=300",
-        "X-Catalog-Source": "live"
-      }
+    return getDomainText(fullScript, 200, {
+      "Cache-Control": "public, max-age=300",
+      "X-Catalog-Source": "live"
     });
   }
 
   // =========================================================================
   // Fallback: Unknown Path on get.vib.tools
   // =========================================================================
-  return new Response("Not Found\n", {
-    status: 404,
-    headers: { "Content-Type": "text/plain; charset=utf-8" }
+  return getDomainText("Not Found\n", 404);
+}
+
+/**
+ * HEAD parity handler for Cloudflare Pages Functions wildcard route.
+ * Preserves exact HTTP status and headers while returning an empty body.
+ *
+ * @param {EventContext} context
+ * @returns {Promise<Response>}
+ */
+export async function onRequestHead(context) {
+  const res = await onRequestGet(context);
+  if (res.body && typeof res.body.cancel === "function") {
+    try {
+      await res.body.cancel();
+    } catch (_) {}
+  }
+  return new Response(null, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: res.headers
   });
 }

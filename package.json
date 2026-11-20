@@ -7,8 +7,8 @@
     "dev": "node server.js",
     "start": "node server.js",
     "sync-registry": "node scripts/sync-registry.js",
-    "build": "node scripts/sync-registry.js && node --check server.js && node --check public/app.js && node --check functions/_lib/registry.js && node --check functions/_lib/github.js && node --check functions/api/apps.js && node --check \"functions/[[path]].js\"",
-    "lint": "node --check server.js && node --check public/app.js && node --check functions/_lib/registry.js && node --check functions/_lib/github.js && node --check functions/api/apps.js && node --check \"functions/[[path]].js\"",
+    "build": "node scripts/sync-registry.js && node --check server.js && node --check public/app.js && node --check functions/_lib/registry.js && node --check functions/_lib/github.js && node --check functions/_lib/seo.js && node --check functions/api/apps.js && node --check functions/sitemap.xml.js && node --check functions/llms.txt.js && node --check \"functions/[[path]].js\"",
+    "lint": "node --check server.js && node --check public/app.js && node --check functions/_lib/registry.js && node --check functions/_lib/github.js && node --check functions/_lib/seo.js && node --check functions/api/apps.js && node --check functions/sitemap.xml.js && node --check functions/llms.txt.js && node --check \"functions/[[path]].js\"",
     "test": "node scripts/sync-registry.js && node --test server.test.js public/lib/appMeta.test.js"
   }
 }

@@ -5,21 +5,21 @@
 
 :root {
   /* =========================================================================
-     Typography (Segoe UI ONLY - strictly enforced)
+     Typography (Clean, Crisp & Compact — Inter + JetBrains Mono)
      ========================================================================= */
-  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Consolas, "JetBrains Mono", monospace;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Font Sizes */
+  /* Font Sizes (Compact & Balanced) */
   --text-xs: 11px;
   --text-sm: 12px;
   --text-base: 13px;
-  --text-md: 15px;
-  --text-lg: 18px;
-  --text-xl: 22px;
-  --text-2xl: 26px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 19px;
+  --text-2xl: 21px;
 
-  /* Font Weights (Smooth, soft, clean - never 700/800) */
+  /* Font Weights (Smooth, soft, balanced — never heavy 700/800) */
   --fw-normal: 400;
   --fw-medium: 500;
   --fw-semibold: 600;
@@ -45,14 +45,72 @@
   /* =========================================================================
      Component & Layout Geometry
      ========================================================================= */
-  --header-h: 56px;
-  --sidebar-w: 240px;
-  --mobile-nav-h: 56px;
+  --header-h: 52px;
+  --sidebar-w: 224px;
+  --mobile-nav-h: 52px;
   --scrollbar-size: 1px;
   --z-header: 40;
   --z-sidebar: 50;
   --z-modal: 100;
   --z-toast: 150;
+}
+
+/* Compact Laptop / Split-Screen (e.g. 901px–1120px) */
+@media (max-width: 1120px) {
+  :root {
+    --header-h: 48px;
+    --sidebar-w: 188px;
+
+    --text-xs: 10.5px;
+    --text-sm: 11.5px;
+    --text-base: 12.5px;
+    --text-md: 13px;
+    --text-lg: 15px;
+    --text-xl: 17px;
+    --text-2xl: 19px;
+
+    --sp-4: 14px;
+    --sp-5: 16px;
+    --sp-6: 20px;
+    --sp-8: 24px;
+  }
+}
+
+/* Narrow Split-Screen / Landscape Tablet (769px–900px) */
+@media (max-width: 900px) {
+  :root {
+    --sidebar-w: 168px;
+
+    --text-xs: 10.5px;
+    --text-sm: 11.5px;
+    --text-base: 12px;
+    --text-md: 13px;
+    --text-lg: 14.5px;
+    --text-xl: 16px;
+    --text-2xl: 18px;
+  }
+}
+
+/* Portrait Tablet & Mobile (<= 768px) */
+@media (max-width: 768px) {
+  :root {
+    --header-h: 46px;
+    --mobile-nav-h: 52px;
+
+    --text-xs: 10.5px;
+    --text-sm: 11.5px;
+    --text-base: 12px;
+    --text-md: 13px;
+    --text-lg: 14px;
+    --text-xl: 16px;
+    --text-2xl: 18px;
+
+    --sp-3: 10px;
+    --sp-4: 12px;
+    --sp-5: 14px;
+    --sp-6: 16px;
+    --sp-8: 20px;
+  }
 }
 
 /* =========================================================================
@@ -70,32 +128,32 @@
   --border-strong: #484f58;
   --border-muted: #21262d;
 
-  --text-primary: #e6edf3;
-  --text-secondary: #9198a1;
-  --text-muted: #7d8590;
+  --text-primary: #cdd6e0;
+  --text-secondary: #8f9ba8;
+  --text-muted: #6c7785;
 
-  --accent: #1d6cf6;
-  --accent-hover: #317df8;
-  --accent-readable: #58a6ff;
-  --accent-soft: rgba(29, 108, 246, 0.14);
-  --accent-border: rgba(88, 166, 255, 0.36);
-  --accent-text: #ffffff;
+  --accent: #2663c7;
+  --accent-hover: #3272d8;
+  --accent-readable: #6ca0dc;
+  --accent-soft: rgba(108, 160, 220, 0.11);
+  --accent-border: rgba(108, 160, 220, 0.28);
+  --accent-text: #e8eef7;
 
-  --status-success: #238636;
-  --status-success-text: #3fb950;
-  --status-success-soft: rgba(46, 160, 67, 0.14);
-  --status-success-border: rgba(63, 185, 80, 0.35);
+  --status-success: #23743b;
+  --status-success-text: #5ca874;
+  --status-success-soft: rgba(92, 168, 116, 0.12);
+  --status-success-border: rgba(92, 168, 116, 0.28);
 
-  --status-error: #f85149;
-  --status-error-soft: rgba(248, 81, 73, 0.16);
-  --status-warn: #d29922;
-  --status-warn-soft: rgba(210, 153, 34, 0.16);
+  --status-error: #d96460;
+  --status-error-soft: rgba(217, 100, 96, 0.14);
+  --status-warn: #c49645;
+  --status-warn-soft: rgba(196, 150, 69, 0.14);
 
-  --badge-free-bg: #238636;
-  --badge-paid-bg: #8957e5;
-  --badge-paid-text: #bc8cff;
-  --badge-paid-soft: rgba(137, 87, 229, 0.16);
-  --badge-paid-border: rgba(188, 140, 255, 0.36);
+  --badge-free-bg: #23743b;
+  --badge-paid-bg: #7553b8;
+  --badge-paid-text: #a88fd8;
+  --badge-paid-soft: rgba(168, 143, 216, 0.13);
+  --badge-paid-border: rgba(168, 143, 216, 0.3);
   --modal-backdrop: rgba(0, 0, 0, 0.72);
 
   /* Scrollbar Tokens */

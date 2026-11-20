@@ -312,7 +312,7 @@ export function AppGrid({
     const emptyTitle = document.createElement("h2");
     emptyTitle.className = "app-grid__empty-title";
     emptyTitle.textContent = isCatalogEmpty
-      ? "No applications registered yet"
+      ? "No applications published yet"
       : "No matching applications";
     empty.appendChild(emptyTitle);
 
@@ -320,7 +320,7 @@ export function AppGrid({
     emptyDesc.className = "app-grid__empty-desc";
     if (isCatalogEmpty) {
       emptyDesc.textContent =
-        "Add any GitHub repository URL with .vibtools/apps/app.config.json to registry.json to auto-sync applications here.";
+        "New Vib Tools desktop applications and developer utilities will appear here once published.";
     } else if (searchQuery && searchQuery.trim()) {
       emptyDesc.textContent = `No applications matched "${searchQuery.trim()}" with the current filters.`;
     } else {
@@ -329,14 +329,14 @@ export function AppGrid({
     empty.appendChild(emptyDesc);
 
     if (isCatalogEmpty) {
-      const schemaCta = Button({
-        label: "Schema & AI Setup Docs",
-        icon: "file",
-        variant: "primary",
+      const cliCta = Button({
+        label: "CLI Installer Guide",
+        icon: "terminal",
+        variant: "secondary",
         size: "sm",
-        onClick: () => navigate("/schema")
+        onClick: () => navigate("/cli")
       });
-      empty.appendChild(schemaCta);
+      empty.appendChild(cliCta);
     } else if (hasActiveFilters && typeof onResetFilters === "function") {
       const clearBtn = Button({
         label: "Clear all filters",
