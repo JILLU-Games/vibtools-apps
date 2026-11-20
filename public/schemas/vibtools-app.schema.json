@@ -42,8 +42,8 @@
     },
     "access": {
       "type": "string",
-      "enum": ["Free", "Paid"],
-      "description": "Access or license tier badge."
+      "enum": ["Free", "Paid", "Forge"],
+      "description": "Access or origin tier badge: Free (first-party free/OSS), Paid (first-party commercial), or Forge (curated third-party or reverse-engineered utility)."
     },
     "icon": {
       "type": "string",
@@ -152,6 +152,14 @@
         ]
       }
     },
+    "dependencies": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Optional companion tools or third-party runtimes required when installing manually via archive/ZIP. Renders the conditional Companion Tools card on apps.vib.tools.",
+      "items": {
+        "$ref": "#/$defs/dependencyItem"
+      }
+    },
     "links": {
       "type": "object",
       "minProperties": 1,
@@ -241,6 +249,41 @@
           "type": "boolean",
           "default": false,
           "description": "Marks an older release as deprecated in version selectors."
+        }
+      }
+    },
+    "dependencyItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "url"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the companion tool or runtime (e.g. Chromium, FFmpeg, VC++ Redistributable)."
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://.+",
+          "description": "Direct HTTPS download URL or official vendor download page (strict https:// without credentials)."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Optional recommended or minimum version label (e.g. 131.0, 6.1+)."
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140,
+          "description": "Optional concise one-line note explaining why the tool is needed."
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "Indicates whether the companion tool is mandatory (true) or optional (false)."
         }
       }
     }

@@ -254,14 +254,15 @@ How `get.vib.tools` routes each version above:
 | `versions` | **Yes** | Non-empty map (`^[vV]?[0-9]...`) | Complete version catalog (download URLs, sizes, checksums, per-version installers). |
 | `tagline` | No | `string` (1–160 chars) | Short 1-line summary on catalog cards and app detail header. |
 | `category` | No | `string` (1–48 chars) | Groups the app into dynamic sidebar categories and `/category/<name>` views. |
-| `access` | No | `"Free" \| "Paid"` | Renders access badge and activates the catalog Free/Paid filter. |
+| `access` | No | `"Free" \| "Paid" \| "Forge"` | Renders tier badge (`Free` = first-party OSS/free, `Paid` = first-party commercial, `Forge` = third-party / reverse-engineered utility) and activates catalog filter. |
 | `icon` | No | `https://...` URL | App icon on cards and detail page (falls back to 2-letter monogram if omitted). |
-| `installer` | No | `string \| { type?, script }` | Shared default installer script (repo path or trusted `https://` URL). |
+| `installer` | No | `string \| { type?, script }` | Shared default installer script (recommended: R2 `https://dl.vib.tools/.../installer.ps1`, or repo path). |
 | `docs` | No | `{ features?, changelog? }` | Repo-relative Markdown paths rendered in sanitized ARIA tabs. |
 | `platforms` | No | `string[]` (unique) | Read-only OS specification row on `/app/<slug>` (e.g. `["Windows 10/11"]`). |
 | `architectures` | No | `string[]` (unique) | Read-only CPU architecture row on `/app/<slug>` (e.g. `["x64", "arm64"]`). |
 | `requirements` | No | `string[] \| Record<string, string>` | Renders a structured **System Requirements** card on `/app/<slug>`. |
 | `screenshots` | No | `(https:// \| { url, alt? })[]` | Renders a lazy-loaded **Screenshots** gallery card on `/app/<slug>`. |
+| `dependencies` | No | `{ name, url, version?, note?, required? }[]` | Renders the conditional **Companion Tools** download card between **Download & Install** and **Resources & Links** when extra helper tools/runtimes are needed for manual ZIP installs (`url` must be strict `https://`). |
 | `links` | No | `Record<string, https://>` | Renders external buttons under **Resources & Links** in the detail sidebar. |
 
 ### Version Release Properties (`versions.<key>`, `additionalProperties: false`)

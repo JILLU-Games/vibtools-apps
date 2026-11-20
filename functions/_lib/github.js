@@ -28,6 +28,7 @@ const FROZEN_ROOT_KEYS = new Set([
   "architectures",
   "requirements",
   "screenshots",
+  "dependencies",
   "links",
   "versions"
 ]);
@@ -44,7 +45,7 @@ const FROZEN_VERSION_KEYS = new Set([
 
 const ALLOWED_INSTALLER_TYPES = new Set(["powershell", "bash", "sh", "cmd"]);
 const ALLOWED_CHANNELS = new Set(["stable", "beta", "alpha"]);
-const ALLOWED_ACCESS = new Set(["Free", "Paid"]);
+const ALLOWED_ACCESS = new Set(["Free", "Paid", "Forge"]);
 const STRICT_LOWER_SLUG_RE = /^[a-z0-9][a-z0-9-_]{0,63}$/;
 const VERSION_KEY_RE = /^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$/;
 const SHA256_RE = /^[a-fA-F0-9]{64}$/;
@@ -78,7 +79,12 @@ function isValidHttpsUrl(value) {
   if (typeof value !== "string" || !value.startsWith("https://")) return false;
   try {
     const parsed = new URL(value);
-    return parsed.protocol === "https:" && Boolean(parsed.hostname);
+    return (
+      parsed.protocol === "https:" &&
+      Boolean(parsed.hostname) &&
+      !parsed.username &&
+      !parsed.password
+    );
   } catch (_) {
     return false;
   }
@@ -670,7 +676,7 @@ export function validateAppConfig(config) {
       return { ok: false, status: 422, error: "Field category must be a non-empty string (max 48 chars)" };
     }
     if (config.access !== undefined && !ALLOWED_ACCESS.has(config.access)) {
-      return { ok: false, status: 422, error: "Field access in app.config.json must be 'Free' or 'Paid'" };
+      return { ok: false, status: 422, error: "Field access in app.config.json must be 'Free', 'Paid', or 'Forge'" };
     }
     if (config.icon !== undefined && !isValidHttpsUrl(config.icon)) {
       return { ok: false, status: 422, error: "Field icon in app.config.json must be a valid https:// URL" };
@@ -730,6 +736,36 @@ export function validateAppConfig(config) {
           }
         } else {
           return { ok: false, status: 422, error: "Each screenshot entry must be an https:// string or { url, alt? } object" };
+        }
+      }
+    }
+    if (config.dependencies !== undefined) {
+      if (!Array.isArray(config.dependencies) || config.dependencies.length === 0) {
+        return { ok: false, status: 422, error: "Field dependencies must be a non-empty array of companion tool objects" };
+      }
+      const allowedDepKeys = new Set(["name", "url", "version", "note", "required"]);
+      for (const dep of config.dependencies) {
+        if (!dep || typeof dep !== "object" || Array.isArray(dep)) {
+          return { ok: false, status: 422, error: "Each dependencies item must be a plain object with name and url" };
+        }
+        const unknownDepKeys = Object.keys(dep).filter((k) => !allowedDepKeys.has(k));
+        if (unknownDepKeys.length > 0) {
+          return { ok: false, status: 422, error: `Unknown properties in dependencies item: ${unknownDepKeys.join(", ")}` };
+        }
+        if (typeof dep.name !== "string" || !dep.name.trim() || dep.name.length > 80) {
+          return { ok: false, status: 422, error: "Each dependencies item name must be a non-empty string (max 80 chars)" };
+        }
+        if (!isValidHttpsUrl(dep.url)) {
+          return { ok: false, status: 422, error: "Each dependencies item url must be a valid https:// URL without credentials" };
+        }
+        if (dep.version !== undefined && (typeof dep.version !== "string" || !dep.version.trim() || dep.version.length > 32)) {
+          return { ok: false, status: 422, error: "Each dependencies item version must be a non-empty string (max 32 chars)" };
+        }
+        if (dep.note !== undefined && (typeof dep.note !== "string" || !dep.note.trim() || dep.note.length > 140)) {
+          return { ok: false, status: 422, error: "Each dependencies item note must be a non-empty string (max 140 chars)" };
+        }
+        if (dep.required !== undefined && typeof dep.required !== "boolean") {
+          return { ok: false, status: 422, error: "Each dependencies item required flag must be a boolean" };
         }
       }
     }

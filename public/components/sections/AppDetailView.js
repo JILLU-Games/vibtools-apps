@@ -5,6 +5,7 @@ import { copyToClipboard } from "../../lib/clipboard.js";
 import {
   getAppMonogram,
   getPackageFormat,
+  getAccessBadgeVariant,
   formatReleaseDate,
   formatVersionLabel,
   buildInstallCommand,
@@ -261,12 +262,10 @@ function renderDetail(container, app, docs) {
   }
 
   if (app.access) {
-    const isFree = app.access.toLowerCase() === "free";
-    const isPaid = app.access.toLowerCase() === "paid";
     nameRow.appendChild(
       Badge({
         text: app.access,
-        variant: isFree ? "success" : isPaid ? "paid" : "neutral"
+        variant: getAccessBadgeVariant(app.access)
       })
     );
   }
@@ -893,6 +892,108 @@ function renderDetail(container, app, docs) {
     }
 
     mainCol.appendChild(reqCard);
+  }
+
+  // Conditional Companion Tools Card (ONLY when real app.dependencies exists — strictly between Download & Install and Resources & Links)
+  if (Array.isArray(app.dependencies) && app.dependencies.length > 0) {
+    const validDeps = app.dependencies.filter(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        typeof item.name === "string" &&
+        item.name.trim() &&
+        typeof item.url === "string" &&
+        /^https:\/\//i.test(item.url.trim())
+    );
+
+    if (validDeps.length > 0) {
+      const depsCard = document.createElement("section");
+      depsCard.className = "app-detail__section-card app-detail__deps-card";
+      depsCard.setAttribute("aria-labelledby", "companion-tools-heading");
+
+      const depsHead = document.createElement("div");
+      depsHead.className = "app-detail__panel-head";
+
+      const depsTitle = document.createElement("h2");
+      depsTitle.id = "companion-tools-heading";
+      depsTitle.className = "app-detail__panel-title";
+      depsTitle.textContent = "Companion Tools";
+      depsHead.appendChild(depsTitle);
+
+      depsHead.appendChild(
+        Badge({
+          text: `${validDeps.length} ${validDeps.length === 1 ? "tool" : "tools"}`,
+          variant: "neutral"
+        })
+      );
+      depsCard.appendChild(depsHead);
+
+      const depsList = document.createElement("ul");
+      depsList.className = "app-detail__deps-list";
+
+      validDeps.forEach((dep) => {
+        const li = document.createElement("li");
+        li.className = "app-detail__dep-item";
+
+        const metaCol = document.createElement("div");
+        metaCol.className = "app-detail__dep-meta";
+
+        const titleRow = document.createElement("div");
+        titleRow.className = "app-detail__dep-title-row";
+
+        const depName = document.createElement("span");
+        depName.className = "app-detail__dep-name";
+        depName.textContent = dep.name.trim();
+        titleRow.appendChild(depName);
+
+        if (typeof dep.version === "string" && dep.version.trim()) {
+          titleRow.appendChild(
+            Badge({
+              text: dep.version.trim(),
+              variant: "mono"
+            })
+          );
+        }
+
+        const isOptional = dep.required === false;
+        titleRow.appendChild(
+          Badge({
+            text: isOptional ? "Optional" : "Required",
+            variant: isOptional ? "neutral" : "warn"
+          })
+        );
+
+        metaCol.appendChild(titleRow);
+
+        if (typeof dep.note === "string" && dep.note.trim()) {
+          const noteEl = document.createElement("p");
+          noteEl.className = "app-detail__dep-note";
+          noteEl.textContent = dep.note.trim();
+          metaCol.appendChild(noteEl);
+        }
+
+        li.appendChild(metaCol);
+
+        li.appendChild(
+          Button({
+            label: "Download",
+            icon: "download",
+            variant: "secondary",
+            size: "sm",
+            href: dep.url.trim(),
+            target: "_blank",
+            rel: "noopener noreferrer",
+            ariaLabel: `Download ${dep.name.trim()}`,
+            className: "app-detail__dep-btn"
+          })
+        );
+
+        depsList.appendChild(li);
+      });
+
+      depsCard.appendChild(depsList);
+      asideCol.appendChild(depsCard);
+    }
   }
 
   // Conditional Additional Resource Links (ONLY when real app.links exists)

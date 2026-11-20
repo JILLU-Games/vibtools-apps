@@ -4,6 +4,7 @@ import { copyToClipboard } from "../../lib/clipboard.js";
 import {
   getAppMonogram,
   getPackageFormat,
+  getAccessBadgeVariant,
   formatVersionLabel,
   buildInstallCommand,
   filterApps,
@@ -251,7 +252,8 @@ export function AppGrid({
   const accessTiers = [
     { value: "all", label: "All" },
     { value: "free", label: "Free" },
-    { value: "paid", label: "Paid" }
+    { value: "paid", label: "Paid" },
+    { value: "forge", label: "Forge" }
   ];
 
   accessTiers.forEach((tier) => {
@@ -569,11 +571,9 @@ export function AppGrid({
       headerEl.appendChild(identity);
 
       if (app.access) {
-        const isFree = app.access.toLowerCase() === "free";
-        const isPaid = app.access.toLowerCase() === "paid";
         const accessBadge = Badge({
           text: app.access,
-          variant: isFree ? "success" : isPaid ? "paid" : "neutral"
+          variant: getAccessBadgeVariant(app.access)
         });
         headerEl.appendChild(accessBadge);
       }

@@ -204,12 +204,26 @@ export function buildInstallerDownloadUrl(slug, version, options = {}) {
 }
 
 /**
+ * Resolves the UI Badge variant for an application's access/origin tier.
+ *
+ * @param {string|undefined|null} access
+ * @returns {"success"|"paid"|"forge"|"neutral"}
+ */
+export function getAccessBadgeVariant(access) {
+  const tier = String(access || "").trim().toLowerCase();
+  if (tier === "free") return "success";
+  if (tier === "paid") return "paid";
+  if (tier === "forge") return "forge";
+  return "neutral";
+}
+
+/**
  * Filters the loaded catalog deterministically by category, license/access tier, and search query.
  *
  * @param {Array<Object>} apps
  * @param {Object} filters
  * @param {string} [filters.category]
- * @param {"all"|"free"|"paid"} [filters.access="all"]
+ * @param {"all"|"free"|"paid"|"forge"} [filters.access="all"]
  * @param {string} [filters.query=""]
  * @returns {Array<Object>}
  */

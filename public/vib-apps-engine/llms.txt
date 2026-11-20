@@ -32,7 +32,7 @@ HARD INVARIANTS (violating any rule causes HTTP 422 rejection and hides the app 
 - MUST include required root keys: `"slug"`, `"name"`, `"latest"`, `"versions"`.
 - `"slug"` MUST be lowercase `^[a-z0-9][a-z0-9-_]{0,63}$`.
 - `"name"` MUST be 1–80 chars; `"tagline"` (optional) max 160 chars; `"category"` (optional) max 48 chars.
-- `"access"` (optional) MUST be `"Free"` or `"Paid"`.
+- `"access"` (optional) MUST be `"Free"` (first-party free/OSS), `"Paid"` (first-party commercial), or `"Forge"` (curated third-party / reverse-engineered utility).
 - `"latest"` MUST match an EXACT key inside `"versions"` (e.g. `"v1.0.3"` === `"v1.0.3"`).
 - Every key inside `"versions"` MUST match `^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$` (must begin with a digit after optional `v`).
 - Every version object MUST include `"url"` starting with `https://` on a trusted host:
@@ -41,12 +41,13 @@ HARD INVARIANTS (violating any rule causes HTTP 422 rejection and hides the app 
 - Every `"released_at"` MUST be a real calendar ISO date `"YYYY-MM-DD"` (e.g. `"2026-02-31"` is rejected; NEVER use `"releaseDate"`).
 - Every `"sha256"` MUST be an exact 64-character hexadecimal string (`^[a-fA-F0-9]{64}$`).
 - `"channel"` (optional) MUST be `"stable"`, `"beta"`, or `"alpha"`. `"deprecated"` (optional) MUST be boolean.
-- `"icon"`, `"screenshots"`, and `"links"` values MUST start with `https://`.
+- `"icon"`, `"screenshots"`, `"dependencies[].url"`, and `"links"` values MUST be strict `https://` URLs (no credentials).
+- `"dependencies"` (optional) is a non-empty array of `{ name, url, version?, note?, required? }` objects for extra companion tools/runtimes needed during manual ZIP installation (renders the conditional **Companion Tools** card on `/app/<slug>`).
 - `"platforms"` and `"architectures"` (optional) MUST contain unique non-empty strings.
 - `"installer"` (root or per-version) and `"docs"` paths MUST NOT contain `..` traversal segments or non-`https://` URI schemes.
 
 ### Allowed Root Keys (Exact Frozen List)
-`$schema`, `schemaVersion`, `slug`, `name`, `tagline`, `category`, `access`, `icon`, `latest`, `installer`, `docs`, `platforms`, `architectures`, `requirements`, `screenshots`, `links`, `versions`
+`$schema`, `schemaVersion`, `slug`, `name`, `tagline`, `category`, `access`, `icon`, `latest`, `installer`, `docs`, `platforms`, `architectures`, `requirements`, `screenshots`, `dependencies`, `links`, `versions`
 
 ### Allowed Version Keys (Exact Frozen List)
 `url`, `installer`, `size`, `sha256`, `released_at`, `channel`, `deprecated`

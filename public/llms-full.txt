@@ -45,11 +45,11 @@
 ## 3. Hard Frozen Schema Invariants (`schemaVersion: 1` — HTTP 422 on Violation)
 
 - **Closed Contract (`additionalProperties: false`):** Zero custom or misspelled keys allowed on root or inside `versions.<ver>`.
-  - **Exact Allowed Root Keys:** `$schema`, `schemaVersion`, `slug`, `name`, `tagline`, `category`, `access`, `icon`, `latest`, `installer`, `docs`, `platforms`, `architectures`, `requirements`, `screenshots`, `links`, `versions`
+  - **Exact Allowed Root Keys:** `$schema`, `schemaVersion`, `slug`, `name`, `tagline`, `category`, `access`, `icon`, `latest`, `installer`, `docs`, `platforms`, `architectures`, `requirements`, `screenshots`, `dependencies`, `links`, `versions`
   - **Exact Allowed Version Keys:** `url`, `installer`, `size`, `sha256`, `released_at`, `channel`, `deprecated`
 - **Required Root Fields:** `slug`, `name`, `latest`, `versions` (plus always set `"$schema": "https://apps.vib.tools/schemas/vibtools-app.schema.json"` and `"schemaVersion": 1`).
 - **`slug`:** Strictly lowercase `^[a-z0-9][a-z0-9-_]{0,63}$`.
-- **`name`:** 1–80 chars. **`tagline`:** 1–160 chars. **`category`:** 1–48 chars. **`access`:** `"Free"` or `"Paid"`.
+- **`name`:** 1–80 chars. **`tagline`:** 1–160 chars. **`category`:** 1–48 chars. **`access`:** `"Free"` (first-party free/OSS), `"Paid"` (first-party commercial), or `"Forge"` (curated third-party / reverse-engineered utility).
 - **`latest`:** MUST match an EXACT own key in `versions` (e.g. `"v1.0.3"` === `"v1.0.3"`).
 - **Version Keys:** MUST match `^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$` (digit required after optional `v`; prototype names like `constructor` are forbidden).
 - **`url` (Required per version):** Valid `https://` URL on a trusted binary host:
@@ -58,7 +58,8 @@
 - **`released_at`:** Real calendar ISO date `"YYYY-MM-DD"` (impossible dates like `"2026-02-31"` return `422`; NEVER use `"releaseDate"`).
 - **`sha256`:** Exact 64-character hex string `^[a-fA-F0-9]{64}$` (omit until real binary hash is known; NEVER write `"TBD"`).
 - **`size`:** 1–32 chars (e.g. `"42.8 MB"`). **`channel`:** `"stable" | "beta" | "alpha"`. **`deprecated`:** boolean.
-- **`icon`, `screenshots`, `links`:** Must be valid `https://` URLs with a hostname.
+- **`icon`, `screenshots`, `dependencies[].url`, `links`:** Must be strict `https://` URLs with a hostname and no embedded credentials.
+- **`dependencies` (optional Companion Tools):** Non-empty array of `{ "name": string (1–80), "url": "https://...", "version"?: string (1–32), "note"?: string (1–140), "required"?: boolean (default true) }` (`additionalProperties: false`). Renders the conditional **Companion Tools** download card between **Download & Install** and **Resources & Links** on `/app/<slug>` only when present.
 - **`platforms`, `architectures`:** Unique non-empty string arrays (`uniqueItems: true`).
 - **`requirements`:** Non-empty string array (`minItems: 1`) or non-empty string key-value map.
 - **`installer` (root or per-version):** Safe repo-relative path (no `..`, no non-HTTPS scheme), trusted `https://` URL, or `{ "type": "powershell"|"bash"|"sh"|"cmd", "script": "..." }`.

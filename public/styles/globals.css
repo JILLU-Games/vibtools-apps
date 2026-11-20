@@ -377,6 +377,12 @@ pre {
   color: var(--badge-paid-text);
 }
 
+.ui-badge--forge {
+  background-color: var(--badge-forge-soft);
+  border-color: var(--badge-forge-border);
+  color: var(--badge-forge-text);
+}
+
 .ui-badge--warn {
   background-color: var(--status-warn-soft);
   border-color: var(--status-warn);
@@ -1813,6 +1819,60 @@ pre {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2);
+}
+
+/* Conditional Companion Tools Card */
+.app-detail__deps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-detail__dep-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-top: 10px;
+  border-top: 1px solid var(--border-muted);
+}
+
+.app-detail__dep-item:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.app-detail__dep-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.app-detail__dep-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.app-detail__dep-name {
+  font-size: var(--text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.app-detail__dep-note {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.app-detail__dep-btn {
+  flex-shrink: 0;
 }
 
 /* Right Column: Download & Install Panel */

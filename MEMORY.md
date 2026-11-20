@@ -2,15 +2,15 @@
 
 > **Active Project:** `vib-apps-hub`  
 > **Target Domains:** `apps.vib.tools` (App Catalog) & `get.vib.tools` (Edge CLI & Direct Download Router)  
-> **Last Updated:** 2026-11-20 (CalGrid live on `apps.vib.tools`; added `?download=1` version-injected installer script download endpoint & UI button + R2-hosted master installer AI prompts/docs)
+> **Last Updated:** 2026-11-20 (Added `Forge` access tier across schema/validator/UI/docs + optional `dependencies[]` conditional **Companion Tools** download card on `/app/<slug>`)
 
 ---
 
 ## 1. Current Status
 
-- **Project Status:** **Production-Ready & Verified** — `https://github.com/vibdocs/CalGrid` live in `registry.json` & `functions/_lib/registry.js`; `?download=1` selected-version installer script download (`Content-Disposition: attachment`) and R2-hosted master installer guidance implemented and verified.
+- **Project Status:** **Production-Ready & Verified** — `https://github.com/vibdocs/CalGrid` live in `registry.json` & `functions/_lib/registry.js`; `?download=1` selected-version installer script download, `Forge` 3rd access tier (`Free` | `Paid` | `Forge`), and optional `dependencies[]` **Companion Tools** card implemented and verified.
 - **Git Repository:** `https://github.com/JILLU-Games/vibtools-apps.git` (Ready to commit & push to `main` for Cloudflare Pages deployment)
-- **Active / Next Phase:** **Production Push & Verification** — Push updated `vib-apps-hub` (`?download=1` edge route, AppDetail installer download button, updated R2 master installer AI prompts) to Cloudflare Pages.
+- **Active / Next Phase:** **Production Push & Verification** — Push updated `vib-apps-hub` (`Forge` tier, `dependencies[]` Companion Tools card, updated Frozen v1 schema & AI prompts) to Cloudflare Pages.
 - **Completed BugFix & Refinement Phases:**
   - Cycle 1 Phases 1–4 (Edge Routing/CORS, Frontend UI Parity, Caching/PWA)
   - Node.js 22 Edge Emulator & Dev Server (`server.js` & `package.json` on Port 3000)

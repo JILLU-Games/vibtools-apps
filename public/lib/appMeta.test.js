@@ -9,6 +9,7 @@ import {
   formatVersionLabel,
   buildInstallCommand,
   buildDownloadUrl,
+  getAccessBadgeVariant,
   filterApps,
   computeCategoryCounts,
   sortApps,
@@ -62,19 +63,27 @@ test("filterApps and computeCategoryCounts filter accurately by category, access
   const sample = [
     { slug: "calgrid", name: "CalGrid", tagline: "Desktop calendar widget", category: "Utilities", access: "Free" },
     { slug: "devprompt", name: "DevPrompt", tagline: "Terminal prompt manager", category: "Developer Tools", access: "Free" },
-    { slug: "vibclip", name: "VibClip", tagline: "Encrypted clipboard history", category: "Utilities", access: "Paid" }
+    { slug: "vibclip", name: "VibClip", tagline: "Encrypted clipboard history", category: "Utilities", access: "Paid" },
+    { slug: "chromeforge", name: "ChromeForge", tagline: "Repackaged browser automation suite", category: "Automation", access: "Forge" }
   ];
 
   const { categories, counts, total } = computeCategoryCounts(sample);
-  assert.deepEqual(categories, ["Developer Tools", "Utilities"]);
-  assert.deepEqual(counts, { Utilities: 2, "Developer Tools": 1 });
-  assert.equal(total, 3);
+  assert.deepEqual(categories, ["Automation", "Developer Tools", "Utilities"]);
+  assert.deepEqual(counts, { Utilities: 2, "Developer Tools": 1, Automation: 1 });
+  assert.equal(total, 4);
 
   assert.equal(filterApps(sample, { access: "paid" }).length, 1);
   assert.equal(filterApps(sample, { access: "paid" })[0].slug, "vibclip");
+  assert.equal(filterApps(sample, { access: "forge" }).length, 1);
+  assert.equal(filterApps(sample, { access: "forge" })[0].slug, "chromeforge");
   assert.equal(filterApps(sample, { category: "utilities", access: "free" }).length, 1);
   assert.equal(filterApps(sample, { query: "prompt" }).length, 1);
   assert.equal(filterApps(sample, { query: "nonexistent" }).length, 0);
+
+  assert.equal(getAccessBadgeVariant("Free"), "success");
+  assert.equal(getAccessBadgeVariant("Paid"), "paid");
+  assert.equal(getAccessBadgeVariant("Forge"), "forge");
+  assert.equal(getAccessBadgeVariant("unknown"), "neutral");
 });
 
 // --- Cycle 2 Frontend Regression Suite (BUG-12, BUG-14, BUG-15, BUG-16) ---

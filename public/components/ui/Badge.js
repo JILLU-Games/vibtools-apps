@@ -6,7 +6,7 @@ import { Icon } from "./Icon.js";
  *
  * @param {Object} options
  * @param {string} options.text - Badge label text
- * @param {"neutral"|"accent"|"success"|"paid"|"warn"|"mono"} [options.variant="neutral"]
+ * @param {"neutral"|"accent"|"success"|"paid"|"forge"|"warn"|"mono"} [options.variant="neutral"]
  * @param {string|Node} [options.icon] - Optional leading icon
  * @param {string} [options.className=""]
  * @returns {HTMLSpanElement}

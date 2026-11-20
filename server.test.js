@@ -1385,6 +1385,76 @@ test("R2-hosted root master installer works with zero repo installer.ps1 and ?do
   }
 });
 
+test("Frozen v1 validator supports Forge access tier and strict optional dependencies[] Companion Tools", () => {
+  const validForgeApp = {
+    $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+    schemaVersion: 1,
+    slug: "browserbot",
+    name: "BrowserBot",
+    access: "Forge",
+    latest: "1.0.0",
+    dependencies: [
+      {
+        name: "Chromium Runtime",
+        version: "131.0",
+        note: "Required for browser automation when installing manually via ZIP",
+        url: "https://dl.vib.tools/runtimes/chromium-131-win-x64.zip",
+        required: true
+      },
+      {
+        name: "VC++ Redistributable",
+        url: "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+        required: false
+      }
+    ],
+    versions: {
+      "1.0.0": { url: "https://dl.vib.tools/BrowserBot/v1.0.0/BrowserBot.zip" }
+    }
+  };
+
+  assert.equal(validateAppConfig(validForgeApp).ok, true);
+
+  // Reject invalid access tier
+  assert.equal(validateAppConfig({ ...validForgeApp, access: "Community" }).ok, false);
+
+  // Reject empty dependencies array
+  assert.equal(validateAppConfig({ ...validForgeApp, dependencies: [] }).ok, false);
+
+  // Reject non-HTTPS or credentialed dependency URL
+  assert.equal(
+    validateAppConfig({
+      ...validForgeApp,
+      dependencies: [{ name: "Tool", url: "http://example.com/tool.exe" }]
+    }).ok,
+    false
+  );
+  assert.equal(
+    validateAppConfig({
+      ...validForgeApp,
+      dependencies: [{ name: "Tool", url: "https://user:pass@example.com/tool.exe" }]
+    }).ok,
+    false
+  );
+
+  // Reject unknown property inside dependency item (additionalProperties: false)
+  assert.equal(
+    validateAppConfig({
+      ...validForgeApp,
+      dependencies: [{ name: "Tool", url: "https://example.com/tool.exe", extra: true }]
+    }).ok,
+    false
+  );
+
+  // Reject non-boolean required flag
+  assert.equal(
+    validateAppConfig({
+      ...validForgeApp,
+      dependencies: [{ name: "Tool", url: "https://example.com/tool.exe", required: "yes" }]
+    }).ok,
+    false
+  );
+});
+
 
 
 

@@ -36,11 +36,12 @@ If you cannot fetch these URLs, STOP immediately and ask me to paste them — NE
 Audit this repository and configure it for apps.vib.tools and get.vib.tools by:
 1. Inspecting our real codebase (README, project/build files, `.vibtools/logo.*`, release assets/tags) so zero fake metadata or invented features are written.
 2. Creating `.vibtools/apps/app.config.json` strictly matching `schemaVersion: 1` (`additionalProperties: false`):
-   - ONLY allowed root keys: `$schema`, `schemaVersion`, `slug`, `name`, `tagline`, `category`, `access`, `icon`, `latest`, `installer`, `docs`, `platforms`, `architectures`, `requirements`, `screenshots`, `links`, `versions`.
+   - ONLY allowed root keys: `$schema`, `schemaVersion`, `slug`, `name`, `tagline`, `category`, `access`, `icon`, `latest`, `installer`, `docs`, `platforms`, `architectures`, `requirements`, `screenshots`, `dependencies`, `links`, `versions`.
    - ONLY allowed `versions.<ver>` keys: `url`, `installer`, `size`, `sha256`, `released_at`, `channel`, `deprecated`.
-   - STRICTLY FORBIDDEN keys (cause HTTP 422): `description`, `license`, `artifacts`, `platforms` inside `versions.<ver>`, `releaseDate`, `downloadUrl`. Use `"access": "Free" | "Paid"`, `"tagline"`, root `"platforms"`/`"architectures"`, and flat `"url"` directly on each version entry.
+   - STRICTLY FORBIDDEN keys (cause HTTP 422): `description`, `license`, `artifacts`, `platforms` inside `versions.<ver>`, `releaseDate`, `downloadUrl`. Use `"access": "Free" | "Paid" | "Forge"` (`Free` = first-party free/OSS, `Paid` = first-party commercial, `Forge` = third-party / reverse-engineered utility), `"tagline"`, root `"platforms"`/`"architectures"`, and flat `"url"` directly on each version entry.
+   - If the app requires extra third-party tools/runtimes when installed manually via ZIP (e.g. Chromium, FFmpeg, VC++ Redistributable), declare optional `"dependencies": [{ "name", "url", "version"?, "note"?, "required"? }]` with strict `https://` URLs (omit `dependencies` completely if the app is standalone).
    - Enforce lowercase `slug`, exact `latest` key match inside `versions`, calendar-valid `YYYY-MM-DD` `released_at`, trusted HTTPS binary URLs, and 64-char hex `sha256` (omit `sha256` if not computed yet — never write placeholders like "TBD").
-   - Verify with `curl -sSI` (when network is available) that every `https://` URL (`versions.<ver>.url`, remote `installer`, `icon`, `links.*`) returns HTTP 200/302/308 — never point `installer` or `links` to a 404 URL.
+   - Verify with `curl -sSI` (when network is available) that every `https://` URL (`versions.<ver>.url`, remote `installer`, `icon`, `dependencies[].url`, `links.*`) returns HTTP 200/302/308 — never point `installer` or `links` to a 404 URL.
 3. Configuring the master installer script (saved as UTF-8 without BOM) using the edge-injected `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` variables:
    - RECOMMENDED (Clean Repo): If a verified master installer is hosted on Cloudflare R2 (e.g. `https://dl.vib.tools/<App>/installer.ps1`), point root `installer.script` to that HTTPS URL and omit `.vibtools/apps/installer.ps1` from the repo (add per-version `versions.<ver>.installer` only for releases with a verified separate script).
    - FALLBACK (Repo-Local): Only create `.vibtools/apps/installer.ps1` in the repo if no verified R2 master installer URL exists yet.
@@ -59,10 +60,11 @@ If you cannot fetch these URLs, STOP immediately and ask me to paste them — NE
 
 Perform a strict forensic audit and fix of `.vibtools/apps/` in this repository:
 1. Validate `.vibtools/apps/app.config.json` strictly against Frozen v1 (`schemaVersion: 1`, `additionalProperties: false`):
-   - Reject and remove/migrate any unknown root keys (e.g. `description` -> `tagline`/`features.md`, `license` -> `access: "Free" | "Paid"`).
+   - Reject and remove/migrate any unknown root keys (e.g. `description` -> `tagline`/`features.md`, `license` -> `access: "Free" | "Paid" | "Forge"` where `Forge` = third-party / reverse-engineered utility).
    - Reject and flatten any invalid nested version structures (e.g. `versions.<ver>.artifacts[]` or `versions.<ver>.platforms` -> flat `url`, `size`, `sha256`, `released_at`, `installer`, `channel`, `deprecated` directly on `versions.<ver>`, with `platforms` and `architectures` at root).
+   - Validate optional `dependencies[]` (Companion Tools) if present: non-empty array of `{ name, url, version?, note?, required? }` with strict `https://` URLs and zero unknown keys (omit `dependencies` if none apply).
    - Verify lowercase `slug`, exact `latest` key match, calendar-valid `YYYY-MM-DD` `released_at`, valid 64-hex `sha256` (or omitted), valid HTTPS `icon` (use repo logo raw HTTPS URL or uploaded asset if available), and safe repo-relative `docs` paths.
-2. Live-probe every `https://` URL (`versions.<ver>.url`, root/per-version `installer`, `icon`, `links.*`) via `curl -sSI` when network is available; fix or remove any 404/broken URLs (never keep a 404 remote `installer`).
+2. Live-probe every `https://` URL (`versions.<ver>.url`, root/per-version `installer`, `icon`, `dependencies[].url`, `links.*`) via `curl -sSI` when network is available; fix or remove any 404/broken URLs (never keep a 404 remote `installer`).
 3. Audit installer hosting & script hygiene:
    - If a verified R2 master installer URL exists (e.g. `https://dl.vib.tools/<App>/installer.ps1`), root `installer.script` may point directly to it so the repo stays clean without `.vibtools/apps/installer.ps1`.
    - Verify the active master/override installer script (saved as UTF-8 without BOM) cleanly uses `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME`, handles optional leading `v` safely, and works with both `get.vib.tools/<slug>[/<version>]` and `?download=1`.
@@ -79,7 +81,9 @@ Violating any rule below triggers HTTP `422 Unprocessable Entity` in `validateAp
 - **Required Root Keys:** `slug` (strict lowercase `^[a-z0-9][a-z0-9-_]{0,63}$`), `name` (1–80 chars), `latest` (exact key in `versions`), and non-empty `versions`.
 - **Version Keys:** Every key in `versions` must match `^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$` (must begin with a digit after optional `v`).
 - **Calendar-Valid Dates:** `released_at` must be a real `YYYY-MM-DD` calendar date (e.g. `"2026-02-31"` is rejected).
-- **Strict Hashes & HTTPS:** `sha256` must be 64 hex chars; `url`, `icon`, `screenshots`, and `links` must use `https://`.
+- **Strict Hashes & HTTPS:** `sha256` must be 64 hex chars; `url`, `icon`, `screenshots`, `dependencies[].url`, and `links` must use strict `https://` (no embedded credentials).
+- **Access / Origin Tiers:** `access` must be `"Free"` (first-party free/OSS), `"Paid"` (first-party commercial), or `"Forge"` (curated third-party / reverse-engineered utility).
+- **Optional Companion Tools (`dependencies`):** When present, must be a non-empty array of `{ name, url, version?, note?, required? }` objects (renders the conditional **Companion Tools** card on `/app/<slug>`).
 - **Trusted Hosts Only:** Binary `url` must point to `dl.vib.tools`, `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com` (or `ALLOWED_DOWNLOAD_HOSTS`). Remote `installer` URLs may also use `raw.githubusercontent.com`.
 - **Path Safety & Uniqueness:** Installer/doc repo paths must never contain `..` traversal or non-`https://` URI schemes; `platforms` and `architectures` must contain unique non-empty strings.
 
