@@ -94,13 +94,26 @@ test("slug validation rejects traversal and accepts valid slugs", () => {
   assert.equal(isValidSlug(""), false);
 });
 
-test("Pure Repo-Only invariant: mockData.js is deleted and registry.json starts as clean empty array", () => {
+test("Pure Repo-Only & Wrangler 3 invariant: mockData.js deleted, registry.json synced to registry.js, and zero import attributes in functions/", async () => {
   assert.equal(fs.existsSync(path.join(process.cwd(), "functions/_lib/mockData.js")), false);
   const rawRegistry = JSON.parse(
     fs.readFileSync(path.join(process.cwd(), "registry.json"), "utf8")
   );
   assert.ok(Array.isArray(rawRegistry));
   assert.deepEqual(rawRegistry, []);
+
+  const { default: syncedRegistry } = await import("./functions/_lib/registry.js");
+  assert.deepEqual(syncedRegistry, rawRegistry);
+
+  for (const relPath of [
+    "functions/_lib/github.js",
+    "functions/_lib/registry.js",
+    "functions/api/apps.js",
+    "functions/[[path]].js"
+  ]) {
+    const src = fs.readFileSync(path.join(process.cwd(), relPath), "utf8");
+    assert.equal(/\b(with|assert)\s*\{\s*type\s*:\s*["']json["']\s*\}/.test(src), false, `${relPath} must not use JSON import attributes (breaks Wrangler 3 esbuild)`);
+  }
 });
 
 test("Pure Repo-Only default: GET /api/apps returns empty live catalog with no-store and unregistered slugs return 404 everywhere", async () => {

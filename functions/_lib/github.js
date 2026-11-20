@@ -1,4 +1,4 @@
-import registry from "../../registry.json" with { type: "json" };
+import registry from "./registry.js";
 
 export const DEFAULT_TRUSTED_DOWNLOAD_HOSTS = [
   "dl.vib.tools",

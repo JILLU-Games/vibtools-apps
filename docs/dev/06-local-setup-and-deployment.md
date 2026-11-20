@@ -79,7 +79,7 @@ curl -I "http://localhost:3000/dl/calgrid/1.0.3?mode=get"
 | :--- | :--- |
 | **Project name** | `vib-apps-hub` |
 | **Framework preset** | `None` |
-| **Build command** | *(leave empty)* |
+| **Build command** | `npm run build` *(syncs `registry.json` → `functions/_lib/registry.js` for Wrangler 3 compatibility and checks syntax)* |
 | **Build output directory** | `public` |
 | **Compatibility date** | `2026-09-04` |
 
