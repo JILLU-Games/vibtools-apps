@@ -152,6 +152,58 @@ export function buildDownloadUrl(slug, version, options = {}) {
 }
 
 /**
+ * Resolves the shell script file extension for an application's active installer.
+ *
+ * @param {Object|null} app
+ * @param {Object|null} [versionObj=null]
+ * @returns {"ps1"|"sh"|"cmd"}
+ */
+export function getInstallerExtension(app, versionObj = null) {
+  const activeSpec = versionObj?.installer ?? app?.installer;
+  const rawType =
+    activeSpec && typeof activeSpec === "object" && typeof activeSpec.type === "string"
+      ? activeSpec.type.trim().toLowerCase()
+      : "";
+
+  if (rawType === "bash" || rawType === "sh") return "sh";
+  if (rawType === "cmd") return "cmd";
+  if (rawType === "powershell") return "ps1";
+
+  const rawTarget =
+    typeof activeSpec === "string"
+      ? activeSpec.trim().toLowerCase()
+      : activeSpec && typeof activeSpec === "object" && typeof activeSpec.script === "string"
+        ? activeSpec.script.trim().toLowerCase()
+        : "";
+
+  if (rawTarget.endsWith(".sh")) return "sh";
+  if (rawTarget.endsWith(".cmd") || rawTarget.endsWith(".bat")) return "cmd";
+  return "ps1";
+}
+
+/**
+ * Builds the browser-downloadable installer script endpoint URL (`?download=1`)
+ * for a selected version, returning the version-injected script as a file attachment.
+ *
+ * @param {string} slug
+ * @param {string} [version]
+ * @param {Object} [options]
+ * @param {Location|{ hostname?: string, origin?: string }} [options.location]
+ * @returns {string}
+ */
+export function buildInstallerDownloadUrl(slug, version, options = {}) {
+  const encodedPath = version
+    ? `/${encodeURIComponent(slug)}/${encodeURIComponent(version)}`
+    : `/${encodeURIComponent(slug)}`;
+  const runtimeLoc = options.location || (typeof window !== "undefined" ? window.location : null);
+  const host = runtimeLoc?.hostname?.toLowerCase() || "";
+  if (host === "localhost" || host === "127.0.0.1") {
+    return `${runtimeLoc.origin}${encodedPath}?mode=get&download=1`;
+  }
+  return `https://get.vib.tools${encodedPath}?download=1`;
+}
+
+/**
  * Filters the loaded catalog deterministically by category, license/access tier, and search query.
  *
  * @param {Array<Object>} apps

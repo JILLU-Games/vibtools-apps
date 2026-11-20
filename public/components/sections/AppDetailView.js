@@ -9,6 +9,8 @@ import {
   formatVersionLabel,
   buildInstallCommand,
   buildDownloadUrl,
+  buildInstallerDownloadUrl,
+  getInstallerExtension,
   getSupportedPlatforms,
   getSupportedArchitectures
 } from "../../lib/appMeta.js";
@@ -492,6 +494,23 @@ function renderDetail(container, app, docs) {
   });
   codeBox.appendChild(copyCodeBtn);
   cliBlock.appendChild(codeBox);
+
+  // Secondary Selected-Version Installer Script Download Button (manual inspect & run)
+  const scriptDlLabel = document.createElement("span");
+  const scriptDlLink = Button({
+    label: scriptDlLabel,
+    icon: "file",
+    variant: "secondary",
+    size: "md",
+    fullWidth: true,
+    href: selectedVersion ? buildInstallerDownloadUrl(app.slug, selectedVersion) : "#",
+    rel: "noopener noreferrer",
+    className: "app-detail__script-dl-btn"
+  });
+  if (!selectedVersion) {
+    scriptDlLink.classList.add("ui-hidden");
+  }
+  cliBlock.appendChild(scriptDlLink);
   installCard.appendChild(cliBlock);
 
   // Release Metadata Specification List (<dl>)
@@ -659,8 +678,21 @@ function renderDetail(container, app, docs) {
       dlLink.classList.add("ui-hidden");
     }
 
-    // Update CLI command
+    // Update CLI command & selected-version installer script download button
     codeText.textContent = buildInstallCommand(app.slug, ver, app.latest);
+    if (ver) {
+      const scriptExt = getInstallerExtension(app, verData);
+      scriptDlLink.href = buildInstallerDownloadUrl(app.slug, ver);
+      scriptDlLink.setAttribute("download", `${app.slug}-${ver}-installer.${scriptExt}`);
+      scriptDlLabel.textContent = `Download ${verLabel} Installer (.${scriptExt})`;
+      scriptDlLink.setAttribute(
+        "aria-label",
+        `Download ${app.name || app.slug} ${verLabel} installer script (.${scriptExt})`
+      );
+      scriptDlLink.classList.remove("ui-hidden");
+    } else {
+      scriptDlLink.classList.add("ui-hidden");
+    }
 
     // Version row
     if (ver) {

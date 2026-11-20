@@ -11,7 +11,7 @@ When a developer adds a GitHub repository URL to `registry.json` inside `vib-app
 2. Fetches `.vibtools/apps/app.config.json` from that repo via GitHub Contents API (cached 300s at Cloudflare Edge; 404 fallback: `.vibtools/app.config.json`).
 3. Validates the JSON strictly against Frozen Schema `v1` (`schemaVersion: 1`, `additionalProperties: false`).
 4. Auto-discovers the app `slug`, catalog metadata, version list, and Markdown tabs (`features.md`, `changelog.md`).
-5. Routes `https://get.vib.tools/<slug>[/<version>]` to the version's installer script (per-version override or root default) with `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` prepended, and routes `https://get.vib.tools/dl/<slug>[/<version>]` via 302 redirect to the version's verified HTTPS binary URL.
+5. Routes `https://get.vib.tools/<slug>[/<version>]` to the version's installer script (per-version override or root default — R2 HTTPS URL or repo path) with `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` prepended, serves downloadable version-injected script attachments via `?download=1`, and routes `https://get.vib.tools/dl/<slug>[/<version>]` via 302 redirect to the version's verified HTTPS binary URL.
 
 ## 2. Target Repository Directory Layout
 Create the following self-contained folder at the root of the application repository:
@@ -20,7 +20,7 @@ Create the following self-contained folder at the root of the application reposi
 └── .vibtools/
     └── apps/
         ├── app.config.json    # REQUIRED — Frozen v1 manifest
-        ├── installer.ps1      # Default PowerShell installer (omit if using remote HTTPS installer URL)
+        ├── installer.ps1      # OPTIONAL — omit if root installer points to an R2 HTTPS URL (recommended for clean repos)
         ├── features.md        # Markdown rendered in "Features & Overview" tab
         └── changelog.md       # Markdown rendered in "Release Changelog" tab
 ```
@@ -163,5 +163,5 @@ Before concluding, verify every item:
 8. Every `"released_at"` is strict `"YYYY-MM-DD"` (never `releaseDate`).
 9. Every `"sha256"` (if present) is an exact 64-character hex string.
 10. Every `"installer"` (root or per-version) points to an existing repo file or trusted `https://` URL.
-11. `.vibtools/apps/installer.ps1` uses `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` without hardcoding stale versions.
+11. The active master installer script (R2 HTTPS URL or `.vibtools/apps/installer.ps1`, UTF-8 without BOM) uses `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` without hardcoding stale versions.
 12. `.vibtools/apps/features.md` and `.vibtools/apps/changelog.md` exist, use clean Markdown headings, and contain zero unsafe raw HTML.

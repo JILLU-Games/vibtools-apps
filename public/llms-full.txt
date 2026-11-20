@@ -23,7 +23,8 @@
 5. **Live Serving:**
    - `GET https://apps.vib.tools/api/apps` -> Catalog grid cards & categories.
    - `GET https://apps.vib.tools/api/apps?slug=<slug>` -> Full metadata + sanitized `features.md` & `changelog.md`.
-   - `irm "https://get.vib.tools/<slug>[/<version>]" | iex` -> Streams version's installer script (`versions[ver].installer` -> root `installer` -> repo defaults) with `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` prepended.
+   - `irm "https://get.vib.tools/<slug>[/<version>]" | iex` -> Streams version's installer script (`versions[ver].installer` -> root `installer` -> repo defaults; supports R2 HTTPS URLs or repo paths) with `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` prepended.
+   - `https://get.vib.tools/<slug>[/<version>]?download=1` -> Browser-downloadable version-injected installer script attachment (`Content-Disposition: attachment`) for manual inspection & execution.
    - `https://get.vib.tools/dl/<slug>[/<version>]` -> `302` redirect to verified HTTPS binary URL on a trusted host.
 
 ---
@@ -34,7 +35,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **1** | Create `.vibtools/apps/` | Isolates all Vib Apps Engine files in one folder at repo root. | Keeps marketplace files separate from app source code. | Auto-scanned by `fetchAppConfig()`, `fetchAppInstaller()`, `fetchAppDoc()`. |
 | **2** | Create `app.config.json` | Declares Frozen v1 metadata, versions, checksums, docs & installers. | Single source of truth for catalog cards, version picker & routing. | Validated by `validateAppConfig()` (`schemaVersion: 1`). |
-| **3** | Create `installer.ps1` | Downloads and installs `$APP_VERSION` cleanly in PowerShell. | Powers one-line `irm "https://get.vib.tools/<slug>" \| iex`. | Streamed by `get.vib.tools` with `$APP_SLUG`, `$APP_VERSION`, `$APP_NAME`. |
+| **3** | Configure Master `installer.ps1` | Downloads and installs `$APP_VERSION` cleanly in PowerShell (UTF-8 without BOM). | Powers one-line CLI (`irm ... \| iex`) and manual script download (`?download=1`). | **Recommended (Clean Repo):** Host on R2 (`https://dl.vib.tools/<App>/installer.ps1`) and reference in root `installer.script`, or place at `.vibtools/apps/installer.ps1`. |
 | **4** | Add per-version `installer` (Optional) | Overrides root installer for specific versions only. | Lets legacy/beta versions use different install scripts or R2 URLs. | Set `versions.<ver>.installer` to repo path or trusted `https://` URL. |
 | **5** | Create `features.md` & `changelog.md` | Provides product overview and release notes in Markdown. | Populates the **Features & Overview** and **Release Changelog** tabs. | Sanitized with Marked.js + DOMPurify on `/app/<slug>`. |
 | **6** | Register Repo URL in `registry.json` | Adds `"https://github.com/owner/repo"` to `vib-apps-hub`. | Connects the repository to `apps.vib.tools` & `get.vib.tools`. | Auto-collected within 5 minutes (300s Edge TTL). |
@@ -195,5 +196,5 @@ irm "https://get.vib.tools/calgrid" | iex
 8. Every `"released_at"` is a real calendar `"YYYY-MM-DD"` date (never `"releaseDate"`).
 9. Every `"sha256"` (if included) is an exact 64-character hex string.
 10. Root/per-version `"installer"` and `"docs"` paths have zero `..` traversal and valid path/HTTPS rules.
-11. `.vibtools/apps/installer.ps1` dynamically uses `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME`.
+11. The active master installer script (R2 HTTPS URL or `.vibtools/apps/installer.ps1`, UTF-8 without BOM) dynamically uses `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME`.
 12. `.vibtools/apps/features.md` and `.vibtools/apps/changelog.md` exist with clean Markdown and zero unsafe raw HTML.

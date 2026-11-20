@@ -2,15 +2,15 @@
 
 > **Active Project:** `vib-apps-hub`  
 > **Target Domains:** `apps.vib.tools` (App Catalog) & `get.vib.tools` (Edge CLI & Direct Download Router)  
-> **Last Updated:** 2026-11-20 (CalGrid repo `https://github.com/vibdocs/CalGrid` audited & synced into `registry.json` + `functions/_lib/registry.js`; UTF-8 BOM strip hardened in `functions/[[path]].js`)
+> **Last Updated:** 2026-11-20 (CalGrid live on `apps.vib.tools`; added `?download=1` version-injected installer script download endpoint & UI button + R2-hosted master installer AI prompts/docs)
 
 ---
 
 ## 1. Current Status
 
-- **Project Status:** **Production-Ready & Verified** — `https://github.com/vibdocs/CalGrid` registered in `registry.json` & synced to `functions/_lib/registry.js`; awaiting v1 schema fix in `vibdocs/CalGrid/.vibtools/apps/app.config.json` so live catalog auto-populates cleanly.
+- **Project Status:** **Production-Ready & Verified** — `https://github.com/vibdocs/CalGrid` live in `registry.json` & `functions/_lib/registry.js`; `?download=1` selected-version installer script download (`Content-Disposition: attachment`) and R2-hosted master installer guidance implemented and verified.
 - **Git Repository:** `https://github.com/JILLU-Games/vibtools-apps.git` (Ready to commit & push to `main` for Cloudflare Pages deployment)
-- **Active / Next Phase:** **CalGrid Upstream Config Alignment & Launch** — Commit the Frozen v1 corrected `.vibtools/apps/app.config.json` to `vibdocs/CalGrid`, deploy to Cloudflare Pages, and submit `https://apps.vib.tools/sitemap.xml` to Google Search Console & Bing Webmaster Tools.
+- **Active / Next Phase:** **Production Push & Verification** — Push updated `vib-apps-hub` (`?download=1` edge route, AppDetail installer download button, updated R2 master installer AI prompts) to Cloudflare Pages.
 - **Completed BugFix & Refinement Phases:**
   - Cycle 1 Phases 1–4 (Edge Routing/CORS, Frontend UI Parity, Caching/PWA)
   - Node.js 22 Edge Emulator & Dev Server (`server.js` & `package.json` on Port 3000)

@@ -1294,6 +1294,97 @@ test("Edge CLI streamer strips leading UTF-8 BOM from repository PowerShell scri
   }
 });
 
+test("R2-hosted root master installer works with zero repo installer.ps1 and ?download=1 serves version-injected browser attachment", async () => {
+  const { buildInstallerDownloadUrl, getInstallerExtension } = await import("./public/lib/appMeta.js");
+
+  // Pure helper assertions
+  assert.equal(
+    buildInstallerDownloadUrl("calgrid", "1.0.4", { location: { hostname: "apps.vib.tools", origin: "https://apps.vib.tools" } }),
+    "https://get.vib.tools/calgrid/1.0.4?download=1"
+  );
+  assert.equal(
+    buildInstallerDownloadUrl("calgrid", "1.0.2", { location: { hostname: "localhost", origin: "http://localhost:3000" } }),
+    "http://localhost:3000/calgrid/1.0.2?mode=get&download=1"
+  );
+  assert.equal(getInstallerExtension({ installer: { type: "powershell", script: "https://dl.vib.tools/CalGrid/installer.ps1" } }), "ps1");
+  assert.equal(getInstallerExtension({ installer: { type: "bash", script: "https://dl.vib.tools/Tool/install.sh" } }), "sh");
+  assert.equal(getInstallerExtension({ installer: "https://dl.vib.tools/Tool/install.cmd" }), "cmd");
+  assert.equal(
+    getInstallerExtension(
+      { installer: { type: "powershell", script: "https://dl.vib.tools/Tool/installer.ps1" } },
+      { installer: { type: "sh", script: "https://dl.vib.tools/Tool/v1/install.sh" } }
+    ),
+    "sh"
+  );
+
+  // Edge handler integration test: R2-only master installer + browser Accept: text/html + ?download=1
+  const originalFetch = globalThis.fetch;
+  const r2Repo = "vib-tools/r2-clean-repo-test";
+  const r2Env = { __REGISTRY_OVERRIDE: [`https://github.com/${r2Repo}`] };
+
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes(`${r2Repo}/contents/.vibtools/apps/app.config.json`)) {
+      return new Response(
+        JSON.stringify({
+          $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+          schemaVersion: 1,
+          slug: "cleanapp",
+          name: "CleanApp",
+          latest: "1.0.4",
+          installer: {
+            type: "powershell",
+            script: "https://dl.vib.tools/CleanApp/installer.ps1"
+          },
+          versions: {
+            "1.0.4": { url: "https://dl.vib.tools/CleanApp/v1.0.4/CleanApp.zip" },
+            "1.0.2": { url: "https://dl.vib.tools/CleanApp/v1.0.2/CleanApp.zip" }
+          }
+        }),
+        { status: 200 }
+      );
+    }
+    if (u === "https://dl.vib.tools/CleanApp/installer.ps1") {
+      return new Response("\uFEFF# R2 Master Installer\r\nWrite-Host \"$APP_SLUG $APP_VERSION\"\r\n", { status: 200 });
+    }
+    return new Response("Not Found", { status: 404 });
+  };
+
+  try {
+    // 1. Browser normal visit to get.vib.tools/cleanapp still redirects to apps.vib.tools/app/cleanapp
+    const browserRedirect = await handleEdgeRequest(
+      new Request("http://localhost:3000/cleanapp?mode=get", {
+        headers: { Accept: "text/html,application/xhtml+xml" }
+      }),
+      r2Env
+    );
+    assert.equal(browserRedirect.status, 302);
+    assert.equal(browserRedirect.headers.get("Location"), "https://apps.vib.tools/app/cleanapp");
+
+    // 2. Browser click on ?download=1 bypasses HTML redirect and downloads version-injected R2 script
+    const browserDownload = await handleEdgeRequest(
+      new Request("http://localhost:3000/cleanapp/1.0.2?mode=get&download=1", {
+        headers: { Accept: "text/html,application/xhtml+xml" }
+      }),
+      r2Env
+    );
+    assert.equal(browserDownload.status, 200);
+    assert.equal(
+      browserDownload.headers.get("Content-Disposition"),
+      'attachment; filename="cleanapp-1.0.2-installer.ps1"'
+    );
+    assert.equal(browserDownload.headers.get("X-Content-Type-Options"), "nosniff");
+    assert.equal(browserDownload.headers.get("X-Robots-Tag"), "noindex, nofollow");
+
+    const scriptBody = await browserDownload.text();
+    assert.equal(scriptBody.includes("\uFEFF"), false);
+    assert.ok(scriptBody.startsWith('$APP_SLUG = "cleanapp"\r\n$APP_VERSION = "1.0.2"\r\n$APP_NAME = "CleanApp"\r\n'));
+    assert.ok(scriptBody.includes("# R2 Master Installer"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 
 
 

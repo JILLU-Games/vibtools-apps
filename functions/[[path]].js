@@ -58,6 +58,36 @@ function resolveVersion(versions, requestedVersion, latestKey) {
 }
 
 /**
+ * Resolves the appropriate file extension for an installer script attachment download.
+ *
+ * @param {Object|null} versionData
+ * @param {Object|null} config
+ * @returns {"ps1"|"sh"|"cmd"}
+ */
+function resolveInstallerExtension(versionData, config) {
+  const activeSpec = versionData?.installer ?? config?.installer;
+  const rawType =
+    activeSpec && typeof activeSpec === "object" && typeof activeSpec.type === "string"
+      ? activeSpec.type.trim().toLowerCase()
+      : "";
+
+  if (rawType === "bash" || rawType === "sh") return "sh";
+  if (rawType === "cmd") return "cmd";
+  if (rawType === "powershell") return "ps1";
+
+  const rawTarget =
+    typeof activeSpec === "string"
+      ? activeSpec.trim().toLowerCase()
+      : activeSpec && typeof activeSpec === "object" && typeof activeSpec.script === "string"
+        ? activeSpec.script.trim().toLowerCase()
+        : "";
+
+  if (rawTarget.endsWith(".sh")) return "sh";
+  if (rawTarget.endsWith(".cmd") || rawTarget.endsWith(".bat")) return "cmd";
+  return "ps1";
+}
+
+/**
  * Cloudflare Pages Wildcard Route Handler ([[path]].js).
  *
  * Implements dual-domain host routing:
@@ -200,8 +230,10 @@ export async function onRequestGet(context) {
 
   const accept = request.headers.get("accept") || "";
   const isHtml = accept.includes("text/html");
+  const isDownloadScript = url.searchParams.get("download") === "1";
 
   // Browser navigation -> redirect human visitors from get.vib.tools to the visual app store
+  // (bypass redirect when ?download=1 explicitly requests an installer script file attachment)
   if (isHtml) {
     if (segments.length === 0) {
       return Response.redirect("https://apps.vib.tools", 302);
@@ -209,7 +241,7 @@ export async function onRequestGet(context) {
     if (segments[0] === "cli") {
       return Response.redirect("https://apps.vib.tools/cli", 302);
     }
-    if ((segments.length === 1 || segments.length === 2) && segments[0] !== "dl") {
+    if ((segments.length === 1 || segments.length === 2) && segments[0] !== "dl" && !isDownloadScript) {
       if (!isValidSlug(segments[0])) {
         return getDomainText("Invalid app slug format.\n", 400);
       }
@@ -347,10 +379,18 @@ export async function onRequestGet(context) {
     const cleanInstallerScript = installerScript.replace(/^\uFEFF/, "");
     const fullScript = injectedHeader + cleanInstallerScript;
 
-    return getDomainText(fullScript, 200, {
+    const responseHeaders = {
       "Cache-Control": "public, max-age=300",
       "X-Catalog-Source": "live"
-    });
+    };
+
+    if (isDownloadScript) {
+      const ext = resolveInstallerExtension(versionData, config);
+      responseHeaders["Content-Disposition"] = `attachment; filename="${safeSlug}-${safeVersion}-installer.${ext}"`;
+      responseHeaders["X-Content-Type-Options"] = "nosniff";
+    }
+
+    return getDomainText(fullScript, 200, responseHeaders);
   }
 
   // =========================================================================
