@@ -23,7 +23,6 @@ flowchart TD
         API["functions/api/apps.js\nGET & OPTIONS /api/apps"]
         W["functions/[[path]].js\nWildcard Host & Route Router"]
         GH["functions/_lib/github.js\nGitHub Contents Client"]
-        MOCK["functions/_lib/mockData.js\nOffline/Fallback Catalog (3 apps)"]
         CACHE["caches.default\nEdge Cache (300s TTL)"]
         STATIC["public/ Static Assets\n(env.ASSETS.fetch)"]
     end
@@ -47,8 +46,6 @@ flowchart TD
 
     API --> CACHE
     API --> GH
-    API -->|0 live apps or missing repo| MOCK
-    W -->|fallback if live repo offline| MOCK
 
     GH --> REG
     GH <--> CACHE
@@ -106,13 +103,13 @@ flowchart LR
 
 > **Local Emulation Note:** In Node.js (`server.js`), `globalThis.caches.default` is polyfilled with an in-memory `Map` honoring `Cache-Control: max-age=<N>` headers so edge caching behaves identically during local testing.
 
-## 4. Fallback & Resilience Design
+## 4. Pure Repo-Only Operation & Resilience Design
 
-`registry.json` currently ships with a single placeholder entry (`example-app` → `vib-tools/example-app`). Whenever live GitHub requests return 404, hit rate limits, or run offline:
+`vib-apps-hub` runs strictly in **100% Pure Repo-Only Mode** with zero hardcoded demo/mock apps. `registry.json` is the single list of connected GitHub repository URLs (initialized cleanly as `[]` until you add your first live repo):
 
-- **Mode A (`/api/apps`):** `Promise.allSettled()` logs and skips failed entries; if `apps.length === 0`, `getMockApps()` returns 3 schema-compliant sample applications (`calgrid`, `devprompt`, `vibclip`).
-- **Mode B (`/api/apps?slug=<slug>`):** Falls back to `findMockApp(slug)` + `getMockDoc(slug, "features" | "changelog")`.
-- **Edge Installer & Direct Download (`get.vib.tools`):** Falls back to `findMockApp(slug)` and `getMockInstaller(slug)`.
+- **Mode A (`/api/apps`):** `Promise.allSettled()` logs and skips any failed/invalid repositories. When `registry.json` is empty or no repos pass validation, `/api/apps` returns `{ "apps": [], "count": 0 }` with `X-Catalog-Source: live`, `Cache-Control: no-store`, and `X-Cache-Status: BYPASS` so adding a new repo syncs immediately without stale cache poisoning.
+- **Mode B (`/api/apps?slug=<slug>`):** Resolves exclusively from registered repositories via `resolveAppBySlug()`, returning `404 Not Found` if unregistered.
+- **Edge Installer & Direct Download (`get.vib.tools`):** Resolves exclusively from registered repositories, returning `404 Not Found` if an app slug or version is absent.
 
 ## Related Guides
 

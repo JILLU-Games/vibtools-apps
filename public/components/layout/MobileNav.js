@@ -46,6 +46,20 @@ export function MobileNav({ activeRoute = { view: "home" } } = {}) {
   });
   inner.appendChild(cliItem);
 
+  // Schema Docs item
+  const schemaItem = document.createElement("a");
+  schemaItem.href = "/schema";
+  schemaItem.className = "app-mobile-nav__item";
+  schemaItem.appendChild(Icon("file", 18));
+  const schemaLabel = document.createElement("span");
+  schemaLabel.textContent = "Schema";
+  schemaItem.appendChild(schemaLabel);
+  schemaItem.addEventListener("click", (e) => {
+    e.preventDefault();
+    navigate("/schema");
+  });
+  inner.appendChild(schemaItem);
+
   // Theme item
   let currentTheme = getTheme();
   const themeItem = document.createElement("button");
@@ -79,6 +93,8 @@ export function MobileNav({ activeRoute = { view: "home" } } = {}) {
     appsItem.removeAttribute("aria-current");
     cliItem.classList.remove("is-active");
     cliItem.removeAttribute("aria-current");
+    schemaItem.classList.remove("is-active");
+    schemaItem.removeAttribute("aria-current");
 
     if (route.view === "home" || route.view === "category" || route.view === "app") {
       appsItem.classList.add("is-active");
@@ -86,6 +102,9 @@ export function MobileNav({ activeRoute = { view: "home" } } = {}) {
     } else if (route.view === "cli") {
       cliItem.classList.add("is-active");
       cliItem.setAttribute("aria-current", "page");
+    } else if (route.view === "schema") {
+      schemaItem.classList.add("is-active");
+      schemaItem.setAttribute("aria-current", "page");
     }
   }
 

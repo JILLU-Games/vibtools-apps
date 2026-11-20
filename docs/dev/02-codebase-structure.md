@@ -14,10 +14,10 @@ This reference maps every source file in the repository to its exact role and ex
 | File | Role | Status |
 | :--- | :--- | :--- |
 | `server.js` | Zero-dependency Node.js 22 HTTP server & Cloudflare Pages Functions emulator (`handleEdgeRequest`, `serveStaticAsset`, in-memory `caches.default` polyfill, listens on `0.0.0.0:3000`). | Active (Local Dev & Tests) |
-| `server.test.js` | 7 `node:test` integration & unit tests covering slug validation, mock catalog, `/api/apps`, SPA fallback, CLI script injection, and `/dl/` 302 redirects. | Active |
+| `server.test.js` | Native `node:test` integration & forensic test suite covering Pure Repo-Only invariants, live GitHub auto-collection, Frozen Schema v1 validation, `/api/apps`, SPA fallback, CLI script injection, and `/dl/` 302 redirects. | Active |
 | `package.json` | Declares `"type": "module"` and npm scripts (`dev`, `start`, `build`, `lint`, `test`); zero npm runtime dependencies. | Active |
 | `wrangler.toml` | Cloudflare Pages config (`name = "vib-apps-hub"`, `pages_build_output_dir = "public"`, `compatibility_date = "2026-09-04"`). | Active |
-| `registry.json` | Central JSON array of connected GitHub app repositories (currently contains placeholder `example-app`). | Active |
+| `registry.json` | Central JSON array of connected GitHub app repository URLs (pure repo-only; starts empty `[]` until live repositories are registered). | Active |
 | `metadata.json` | Workspace applet name and description metadata. | Active |
 | `.vibtools/docs.config.json` | Vib Docs Engine v1 dual-portal configuration (`docsType: "both"` → `docs/users` & `docs/dev`). | Active |
 | `.vibtools/logo.png` | Official Vib Tools PNG logo (`164,017` bytes) referenced by `.vibtools/docs.config.json`. | Active |
@@ -29,8 +29,7 @@ This reference maps every source file in the repository to its exact role and ex
 | :--- | :--- | :--- |
 | `functions/api/apps.js` | `onRequestGet(context)`, `onRequestOptions()` | Store API for Mode A catalog list (`/api/apps`) and Mode B single app detail + docs (`/api/apps?slug=<slug>`). |
 | `functions/[[path]].js` | `onRequestGet(context)` *(internal: `resolveVersion`)* | Wildcard dual-domain host dispatcher (`apps.vib.tools` static + SPA fallback vs `get.vib.tools` browser redirect, CLI manual, PowerShell streamer, `/dl/` 302 redirector). |
-| `functions/_lib/github.js` | `isValidSlug`, `getRegistry`, `findAppEntry`, `fetchRepoFile`, `fetchAppConfig`, `fetchAppInstaller`, `fetchAppDoc` | Registry lookup, slug/path traversal validation, authenticated GitHub Contents API fetcher, and `caches.default` wrapper. |
-| `functions/_lib/mockData.js` | `MOCK_APPS`, `getMockApps`, `findMockApp`, `getMockDoc`, `getMockInstaller` | 3 offline/fallback applications (`calgrid`, `devprompt`, `vibclip`) with versions, Markdown docs, and sample installer scripts. |
+| `functions/_lib/github.js` | `isValidSlug`, `parseRepoIdentifier`, `normalizeRegistryEntry`, `getRegistry`, `resolveAppBySlug`, `validateAppConfig`, `isTrustedInstallerUrl`, `fetchRepoFile`, `fetchAppConfig`, `fetchAppInstaller`, `fetchAppDoc` | Registry normalization, slug/path traversal validation, Frozen Schema v1 parity validation, authenticated GitHub Contents API fetcher, and `caches.default` wrapper. |
 
 ## 3. Frontend Core & Libraries (`public/`)
 

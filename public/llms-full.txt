@@ -1,0 +1,199 @@
+# Vib Apps Engine — Complete Single-URL AI Master Specification (`llms-full.txt`, `schemaVersion: 1`)
+
+> **Single-Fetch AI URL:** `https://apps.vib.tools/llms-full.txt`
+> **Root Index:** `https://apps.vib.tools/llms.txt`
+> **Frozen JSON Schema (Draft 2020-12):** `https://apps.vib.tools/schemas/vibtools-app.schema.json`
+> **Compact Spec:** `https://apps.vib.tools/vib-apps-engine/llms.txt`
+> **Full A–Z Setup Guide:** `https://apps.vib.tools/vib-apps-engine/vibtools-app-config.md`
+> **AI Playbook & Prompt:** `https://apps.vib.tools/vib-apps-engine/ai-guide.md`
+> **Storefront:** `https://apps.vib.tools` | **CLI & Download Router:** `https://get.vib.tools`
+
+---
+
+## 1. System Purpose & Zero-Config Repo-URL Auto-Collection
+`vib-apps-hub` is a zero-build, zero-database app store and PowerShell CLI router. Any application repository becomes a live marketplace listing simply by:
+1. Adding a `.vibtools/apps/` folder inside the app's GitHub repository.
+2. Adding ONLY the GitHub repository URL (`"https://github.com/owner/repo"`) to `registry.json` in `vib-apps-hub`.
+
+### Auto-Collection Pipeline (Step-by-Step)
+1. **Parse & Deduplicate (`parseRepoIdentifier` + `getRegistry`):** Accepts `"https://github.com/owner/repo"`, `.git`, `/tree/<branch>`, `"owner/repo"`, or `{ repo, branch, featured }`. Deduplicates by `repo@branch`.
+2. **Fetch Manifest (`fetchAppConfig`):** Queries GitHub Contents API for `.vibtools/apps/app.config.json` (404 fallback: `.vibtools/app.config.json`) with 300s Cloudflare Edge Cache (`GITHUB_TOKEN` supports private repos server-side).
+3. **Strict Validation (`validateAppConfig`):** Enforces 100% Frozen Schema v1 parity (`additionalProperties: false`, lowercase `slug`, exact `latest` key match, valid `https://` URLs, real calendar `YYYY-MM-DD`, 64-hex `sha256`, unique `platforms`/`architectures`, traversal/scheme guards on `installer` and `docs`). Invalid configs return `422` and are excluded from the catalog.
+4. **Auto-Discovery (`resolveAppBySlug` + Mode A Slug Deduplication):** Automatically matches the app's `slug` from `app.config.json` even when the GitHub repository name differs from `slug`. Deduplicates duplicate slugs across repos.
+5. **Live Serving:**
+   - `GET https://apps.vib.tools/api/apps` -> Catalog grid cards & categories.
+   - `GET https://apps.vib.tools/api/apps?slug=<slug>` -> Full metadata + sanitized `features.md` & `changelog.md`.
+   - `irm "https://get.vib.tools/<slug>[/<version>]" | iex` -> Streams version's installer script (`versions[ver].installer` -> root `installer` -> repo defaults) with `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` prepended.
+   - `https://get.vib.tools/dl/<slug>[/<version>]` -> `302` redirect to verified HTTPS binary URL on a trusted host.
+
+---
+
+## 2. Step-by-Step Setup Matrix (Task, Purpose & Usage)
+
+| Step | File / Action | What It Does (Task) | Purpose (Why Needed) | How It Is Used |
+| :--- | :--- | :--- | :--- | :--- |
+| **1** | Create `.vibtools/apps/` | Isolates all Vib Apps Engine files in one folder at repo root. | Keeps marketplace files separate from app source code. | Auto-scanned by `fetchAppConfig()`, `fetchAppInstaller()`, `fetchAppDoc()`. |
+| **2** | Create `app.config.json` | Declares Frozen v1 metadata, versions, checksums, docs & installers. | Single source of truth for catalog cards, version picker & routing. | Validated by `validateAppConfig()` (`schemaVersion: 1`). |
+| **3** | Create `installer.ps1` | Downloads and installs `$APP_VERSION` cleanly in PowerShell. | Powers one-line `irm "https://get.vib.tools/<slug>" \| iex`. | Streamed by `get.vib.tools` with `$APP_SLUG`, `$APP_VERSION`, `$APP_NAME`. |
+| **4** | Add per-version `installer` (Optional) | Overrides root installer for specific versions only. | Lets legacy/beta versions use different install scripts or R2 URLs. | Set `versions.<ver>.installer` to repo path or trusted `https://` URL. |
+| **5** | Create `features.md` & `changelog.md` | Provides product overview and release notes in Markdown. | Populates the **Features & Overview** and **Release Changelog** tabs. | Sanitized with Marked.js + DOMPurify on `/app/<slug>`. |
+| **6** | Register Repo URL in `registry.json` | Adds `"https://github.com/owner/repo"` to `vib-apps-hub`. | Connects the repository to `apps.vib.tools` & `get.vib.tools`. | Auto-collected within 5 minutes (300s Edge TTL). |
+
+---
+
+## 3. Hard Frozen Schema Invariants (`schemaVersion: 1` — HTTP 422 on Violation)
+
+- **Closed Contract (`additionalProperties: false`):** Zero custom or misspelled keys allowed on root or inside `versions.<ver>`.
+  - **Exact Allowed Root Keys:** `$schema`, `schemaVersion`, `slug`, `name`, `tagline`, `category`, `access`, `icon`, `latest`, `installer`, `docs`, `platforms`, `architectures`, `requirements`, `screenshots`, `links`, `versions`
+  - **Exact Allowed Version Keys:** `url`, `installer`, `size`, `sha256`, `released_at`, `channel`, `deprecated`
+- **Required Root Fields:** `slug`, `name`, `latest`, `versions` (plus always set `"$schema": "https://apps.vib.tools/schemas/vibtools-app.schema.json"` and `"schemaVersion": 1`).
+- **`slug`:** Strictly lowercase `^[a-z0-9][a-z0-9-_]{0,63}$`.
+- **`name`:** 1–80 chars. **`tagline`:** 1–160 chars. **`category`:** 1–48 chars. **`access`:** `"Free"` or `"Paid"`.
+- **`latest`:** MUST match an EXACT own key in `versions` (e.g. `"v1.0.3"` === `"v1.0.3"`).
+- **Version Keys:** MUST match `^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$` (digit required after optional `v`; prototype names like `constructor` are forbidden).
+- **`url` (Required per version):** Valid `https://` URL on a trusted binary host:
+  - Default trusted binary hosts: `dl.vib.tools`, `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com` (plus `env.ALLOWED_DOWNLOAD_HOSTS`).
+  - Default trusted remote installer hosts: all above + `raw.githubusercontent.com`.
+- **`released_at`:** Real calendar ISO date `"YYYY-MM-DD"` (impossible dates like `"2026-02-31"` return `422`; NEVER use `"releaseDate"`).
+- **`sha256`:** Exact 64-character hex string `^[a-fA-F0-9]{64}$` (omit until real binary hash is known; NEVER write `"TBD"`).
+- **`size`:** 1–32 chars (e.g. `"42.8 MB"`). **`channel`:** `"stable" | "beta" | "alpha"`. **`deprecated`:** boolean.
+- **`icon`, `screenshots`, `links`:** Must be valid `https://` URLs with a hostname.
+- **`platforms`, `architectures`:** Unique non-empty string arrays (`uniqueItems: true`).
+- **`requirements`:** Non-empty string array (`minItems: 1`) or non-empty string key-value map.
+- **`installer` (root or per-version):** Safe repo-relative path (no `..`, no non-HTTPS scheme), trusted `https://` URL, or `{ "type": "powershell"|"bash"|"sh"|"cmd", "script": "..." }`.
+- **`docs`:** `{ "features"?: "...", "changelog"?: "..." }` — safe repo-relative paths only (no `..` traversal, no URI schemes like `http://`/`https://`).
+
+---
+
+## 4. Canonical Templates (Copy & Fill Real Repository Values)
+
+### A. `.vibtools/apps/app.config.json`
+```json
+{
+  "$schema": "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+  "schemaVersion": 1,
+  "slug": "calgrid",
+  "name": "CalGrid",
+  "tagline": "Minimalist desktop calendar widget and event scheduler",
+  "category": "Productivity",
+  "access": "Free",
+  "icon": "https://dl.vib.tools/calgrid/icon.png",
+  "latest": "v1.1.0",
+  "installer": {
+    "type": "powershell",
+    "script": ".vibtools/apps/installer.ps1"
+  },
+  "docs": {
+    "features": ".vibtools/apps/features.md",
+    "changelog": ".vibtools/apps/changelog.md"
+  },
+  "platforms": ["Windows 10/11"],
+  "architectures": ["x64"],
+  "requirements": [
+    "Windows 10 / Windows 11 (64-bit)",
+    "PowerShell 5.1 or PowerShell 7+"
+  ],
+  "links": {
+    "docs": "https://docs.vib.tools/calgrid",
+    "source": "https://github.com/vib-tools/calgrid"
+  },
+  "versions": {
+    "v1.1.0": {
+      "url": "https://dl.vib.tools/calgrid/v1.1.0/CalGrid-Setup-1.1.0.exe",
+      "size": "43.2 MB",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "released_at": "2026-11-15",
+      "channel": "stable"
+    },
+    "v1.0.2": {
+      "url": "https://dl.vib.tools/calgrid/v1.0.2/CalGrid-Setup-1.0.2.exe",
+      "installer": "https://dl.vib.tools/calgrid/v1.0.2/install-legacy.ps1",
+      "size": "41.5 MB",
+      "released_at": "2026-10-28",
+      "deprecated": true
+    }
+  }
+}
+```
+
+### B. `.vibtools/apps/installer.ps1`
+```powershell
+$ErrorActionPreference = "Stop"
+
+# Injected automatically by get.vib.tools: $APP_SLUG, $APP_VERSION, $APP_NAME
+if (-not $APP_SLUG) { $APP_SLUG = "calgrid" }
+if (-not $APP_VERSION) { $APP_VERSION = "v1.1.0" }
+if (-not $APP_NAME) { $APP_NAME = "CalGrid" }
+
+$DownloadUrl = "https://get.vib.tools/dl/$APP_SLUG/$APP_VERSION"
+$TempFile = Join-Path $env:TEMP "$APP_SLUG-$APP_VERSION-setup.exe"
+
+Write-Host "==> Downloading $APP_NAME ($APP_VERSION)..." -ForegroundColor Cyan
+try {
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempFile -UseBasicParsing
+    $Hash = (Get-FileHash -Path $TempFile -Algorithm SHA256).Hash.ToLower()
+    Write-Host "==> SHA256: $Hash" -ForegroundColor DarkGray
+    Write-Host "==> Launching installer..." -ForegroundColor Green
+    Start-Process -FilePath $TempFile -Wait
+} catch {
+    Write-Error "Failed to install $APP_NAME ($APP_VERSION): $_"
+    exit 1
+} finally {
+    if (Test-Path $TempFile) {
+        Remove-Item -Path $TempFile -Force -ErrorAction SilentlyContinue
+    }
+}
+Write-Host "==> $APP_NAME ($APP_VERSION) installed." -ForegroundColor Green
+```
+
+### C. `.vibtools/apps/features.md`
+```markdown
+# CalGrid
+
+Minimalist desktop calendar widget and event scheduler built for low-overhead daily planning.
+
+## Key Highlights
+- Instant desktop overlay with keyboard navigation
+- Local-first event storage with zero background bloat
+- Native dark and light theme parity
+
+## Quick Install
+```powershell
+irm "https://get.vib.tools/calgrid" | iex
+```
+```
+
+### D. `.vibtools/apps/changelog.md`
+```markdown
+# Release Changelog
+
+## v1.1.0 (2026-11-15)
+- **Added:** Keyboard quick-add dialog for recurring reminders
+- **Fixed:** High-DPI scaling alignment on multi-monitor setups
+
+## v1.0.2 (2026-10-28)
+- **Fixed:** Startup tray icon refresh after Windows sleep wake
+```
+
+### E. Registering in `vib-apps-hub/registry.json`
+```json
+[
+  "https://github.com/owner/repo"
+]
+```
+
+---
+
+## 5. Mandatory 12-Point Self-Verification Checklist
+1. `.vibtools/apps/app.config.json` parses as strict UTF-8 JSON (no comments, no trailing commas).
+2. `"$schema"` is `"https://apps.vib.tools/schemas/vibtools-app.schema.json"` and `"schemaVersion"` is `1`.
+3. Every root key and version key is in the exact frozen list (zero unknown keys).
+4. `"slug"` is strictly lowercase matching `^[a-z0-9][a-z0-9-_]{0,63}$`.
+5. `"latest"` matches an EXACT own key in `"versions"`.
+6. Every version key starts with a digit after optional `v`.
+7. Every version `"url"` is a valid `https://` URL on a trusted binary host.
+8. Every `"released_at"` is a real calendar `"YYYY-MM-DD"` date (never `"releaseDate"`).
+9. Every `"sha256"` (if included) is an exact 64-character hex string.
+10. Root/per-version `"installer"` and `"docs"` paths have zero `..` traversal and valid path/HTTPS rules.
+11. `.vibtools/apps/installer.ps1` dynamically uses `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME`.
+12. `.vibtools/apps/features.md` and `.vibtools/apps/changelog.md` exist with clean Markdown and zero unsafe raw HTML.

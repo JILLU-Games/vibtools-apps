@@ -40,3 +40,4 @@
 | `planning/error_handling_matrix.md` | File | Complete / Cycle 2 | বেসলাইনে বিদ্যমান এরর হ্যান্ডলিং ইনভেন্টরি, ১৪/১৪ হার্ডেনিং গ্যাপ সম্পন্ন (Phase 1–4) ও স্ট্যান্ডার্ড HTTP এরর কন্ট্রাক্ট। |
 | `planning/feature_readiness_ledger.md` | File | Complete / Cycle 2 | ২০/২০ ফিচার একচুয়াল ওয়ার্কিং স্ট্যাটাস লেজার রেকর্ড (Phase 1–4 সম্পন্ন, ০ কোড বাগ অবশিষ্ট)। |
 | `phases/phase_tracker.md` | File | Complete / Cycle 2 Tracker | Cycle 2 আপডেট ফেজ ট্র্যাকার (৪/৪ সম্পন্ন — ১৮/১৮ বাগ ক্লোজড), কমপ্লিশন লগ, স্কোপ লক প্রটোকল ও Cycle 1 আর্কাইভ। |
+| `vibtools_schema_forensic_audit.md` | File | Active / Verified | Frozen `.vibtools/apps/app.config.json` স্কিমা (v1), রেন্টাইম ভ্যালিডেশন প্যারিটি, Repo URL অটো-কালেকশন পাইপলাইন ও AI/SEO ডক্সের সম্পূর্ণ ফরেনসিক অডিট ও ফিক্স রিপোর্ট। |

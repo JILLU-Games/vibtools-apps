@@ -31,17 +31,21 @@ export function Footer() {
   right.className = "app-footer__links";
 
   const footerLinks = [
-    { label: "vib.tools", href: "https://vib.tools" },
-    { label: "docs.vib.tools", href: "https://docs.vib.tools" },
-    { label: "get.vib.tools", href: "https://get.vib.tools" }
+    { label: "Schema & AI Docs", href: "/schema", external: false },
+    { label: "llms-full.txt", href: "/llms-full.txt", external: true },
+    { label: "vib.tools", href: "https://vib.tools", external: true },
+    { label: "docs.vib.tools", href: "https://docs.vib.tools", external: true },
+    { label: "get.vib.tools", href: "https://get.vib.tools", external: true }
   ];
 
   footerLinks.forEach((item) => {
     const link = document.createElement("a");
     link.href = item.href;
     link.textContent = item.label;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
+    if (item.external) {
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+    }
     right.appendChild(link);
   });
 

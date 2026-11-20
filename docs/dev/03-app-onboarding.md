@@ -1,143 +1,113 @@
 ---
-title: "App Onboarding & .vibtools Schema"
-description: "Authoritative .vibtools directory layout, app.config.json field validation rules, PowerShell installer contract, and registry.json entry format."
+title: "App Onboarding & Frozen .vibtools Schema (v1)"
+description: "Complete A-Z onboarding guide covering Frozen Schema v1 (.vibtools/apps/app.config.json), zero-config GitHub URL registry, per-version installers, and AI-readable specs."
 order: 3
 draft: false
 ---
 
-# App Onboarding & `.vibtools/` Schema
+# App Onboarding & Frozen `.vibtools/` Schema (v1)
 
-Applications are onboarded into `vib-apps-hub` purely through Git metadata—no database migrations or admin UI are required.
+Applications are onboarded into `vib-apps-hub` purely through Git metadata—no database migrations or admin UI are required. Simply add `.vibtools/apps/app.config.json` inside your repository and paste your GitHub repository URL into `registry.json`.
 
-## 1. Required Directory Layout in Target App Repo
+> **Public Machine-Readable Specifications (CORS `*`):**
+> - Frozen JSON Schema (Draft 2020-12): `https://apps.vib.tools/schemas/vibtools-app.schema.json`
+> - Root AI Discovery Index: `https://apps.vib.tools/llms.txt`
+> - Compact AI Agent Spec: `https://apps.vib.tools/vib-apps-engine/llms.txt`
+> - Complete A–Z Setup Guide: `https://apps.vib.tools/vib-apps-engine/vibtools-app-config.md`
+> - AI Execution Playbook & Prompt: `https://apps.vib.tools/vib-apps-engine/ai-guide.md`
 
-Place metadata, installer script, and documentation inside `.vibtools/` at the root of your application repository:
+---
+
+## 1. Repository Directory Layout
+
+Place metadata, installer scripts, and Markdown docs inside `.vibtools/apps/` at the root of your application repository:
 
 ```text
 <app-repo>/
 └── .vibtools/
-    ├── apps/
-    │   └── app.config.json   # Primary manifest (fallback checked on 404: .vibtools/app.config.json)
-    ├── installer.ps1         # Default installer (fallback checked on 404: .vibtools/install.ps1)
-    ├── features.md           # Features & Overview Markdown (referenced via docs.features)
-    └── changelog.md          # Release Changelog Markdown (referenced via docs.changelog)
+    └── apps/
+        ├── app.config.json    # Required Frozen v1 manifest (404 fallback: .vibtools/app.config.json)
+        ├── installer.ps1      # Default PowerShell installer (404 fallback: .vibtools/installer.ps1 -> install.ps1)
+        ├── features.md        # Features & Overview Markdown tab
+        ├── changelog.md       # Release Changelog Markdown tab
+        └── installers/        # Optional per-version installer scripts
+            └── v1.0.0.ps1
 ```
 
 Path resolution rules implemented in `functions/_lib/github.js`:
+- `fetchAppConfig()` checks `.vibtools/apps/app.config.json` first, falling back to `.vibtools/app.config.json` on `404`.
+- `fetchAppInstaller()` checks `versions[ver].installer` first (per-version override), then root `config.installer`, then `.vibtools/apps/installer.ps1` -> `.vibtools/installer.ps1` -> `.vibtools/install.ps1`. Both repo-relative paths and trusted `https://` URLs (`dl.vib.tools`, `github.com`, `raw.githubusercontent.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com`, or `ALLOWED_DOWNLOAD_HOSTS`) are supported.
+- `fetchAppDoc()` reads `config.docs.features` / `config.docs.changelog` (defaulting to `"features.md"` and `"changelog.md"`). Bare filenames resolve in `.vibtools/apps/` first, then `.vibtools/`.
 
-- `fetchAppConfig()` checks `.vibtools/apps/app.config.json` first, falling back to `.vibtools/app.config.json` only on HTTP `404`.
-- `fetchAppInstaller()` checks `config.installer` (string) or `config.installer.script` (object), defaulting to `.vibtools/installer.ps1`. If a filename contains no `/`, `.vibtools/` is prepended automatically. When the default `.vibtools/installer.ps1` returns `404`, `.vibtools/install.ps1` is tried as a fallback.
-- `fetchAppDoc()` reads `config.docs.features` and `config.docs.changelog`. Filenames without `/` automatically resolve under `.vibtools/`.
+---
 
-## 2. `app.config.json` Field Specification
+## 2. Frozen `app.config.json` Field Specification (`schemaVersion: 1`)
 
-### Strictly Required vs Optional Fields
+When `"schemaVersion": 1` is declared, both `public/schemas/vibtools-app.schema.json` and `validateAppConfig()` enforce `additionalProperties: false` on root and version objects, strictly lowercase `slug`, exact `latest` key matching, HTTPS URLs, ISO `YYYY-MM-DD` dates, and 64-char hex SHA256 hashes.
 
-`fetchAppConfig()` (`functions/_lib/github.js:229`) enforces **4 required top-level fields**. All other fields are optional and conditionally rendered by the UI only when present:
-
-| Field | Strictly Required | Type | Consumed By | Notes |
+| Field | Required | Type | Consumed By | Purpose & Notes |
 | :--- | :---: | :--- | :--- | :--- |
-| `slug` | **Yes** | `string` | `github.js`, `[[path]].js`, `AppGrid.js`, `AppDetailView.js` | Must match `/^[a-z0-9][a-z0-9-_]{0,63}$/i`. |
-| `name` | **Yes** | `string` | `AppGrid.js`, `AppDetailView.js`, `app.js` | Display title and browser tab title. |
-| `latest` | **Yes** | `string` | `[[path]].js`, `AppGrid.js`, `AppDetailView.js` | Key in `versions` used for default installs/downloads. |
-| `versions` | **Yes** | `object` | `[[path]].js`, `AppGrid.js`, `AppDetailView.js` | Map of version keys to release objects. |
-| `tagline` | No | `string` | `AppGrid.js`, `AppDetailView.js`, `filterApps()` | 2-line card summary; defaults to `"No description available."` on cards if omitted. |
-| `category` | No | `string` | `Sidebar.js`, `AppGrid.js`, `AppDetailView.js`, `computeCategoryCounts()` | Drives dynamic sidebar categories, counts, and `/category/:name` routes. |
-| `access` | No | `string` | `AppGrid.js`, `AppDetailView.js`, `filterApps()` | `"Free"` (green badge) or `"Paid"` (purple badge); drives the segmented license filter. |
-| `icon` | No | `string` | `AppGrid.js`, `AppDetailView.js` | HTTPS icon URL; falls back to 2-letter monogram (`getAppMonogram()`) if omitted or broken. |
-| `installer` | No | `string \| { type?: string, script?: string }` | `github.js`, `AppGrid.js`, `AppDetailView.js` | Controls installer path and card/detail installer badge (e.g. `PowerShell`). |
-| `docs` | No | `{ features?: string, changelog?: string }` | `api/apps.js`, `github.js`, `AppDetailView.js` | Paths to Markdown files rendered in ARIA tabs. |
-| `platforms` | No | `string[]` | `AppDetailView.js` | Renders an informational **Operating System** `<select>` when non-empty. *(Currently informational; does not alter download URL.)* |
-| `architectures` | No | `string[]` | `AppDetailView.js` | Renders an informational **Architecture** `<select>` when non-empty. *(Currently informational; does not alter download URL.)* |
-| `screenshots` | No | `(string \| { url: string, alt?: string })[]` | `AppDetailView.js` | Renders a lazy-loaded **Screenshots** gallery card. |
-| `requirements` | No | `string[] \| Record<string, string>` | `AppDetailView.js` | Renders a **System Requirements** bulleted list card. |
-| `links` | No | `Record<string, string>` | `AppDetailView.js` | Filters for `https?://` URLs and renders external buttons under **Resources & Links**. |
+| `$schema` | Recommended | `https://...` | IDEs / AI Agents | Canonical schema URI (`https://apps.vib.tools/schemas/vibtools-app.schema.json`). |
+| `schemaVersion` | Recommended | `1` | `validateAppConfig()` | Activates strict Frozen v1 schema enforcement. |
+| `slug` | **Yes** | `^[a-z0-9][a-z0-9-_]{0,63}$` | `github.js`, `[[path]].js`, UI | Permanent URL slug (`/app/<slug>`, `get.vib.tools/<slug>`). Lowercase in v1. |
+| `name` | **Yes** | `string` (1–80 chars) | UI, `[[path]].js` | Display title, browser `<title>`, and injected `$APP_NAME`. |
+| `latest` | **Yes** | Exact key in `versions` | `github.js`, `[[path]].js`, UI | Default release for storefront, `/dl/<slug>`, and `get.vib.tools/<slug>`. |
+| `versions` | **Yes** | Non-empty map | `github.js`, `[[path]].js`, UI | Keys must match `^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$`. |
+| `tagline` | No | `string` (max 160) | `AppGrid.js`, `AppDetailView.js` | Concise summary displayed on cards and detail header. |
+| `category` | No | `string` (max 48) | `Sidebar.js`, `computeCategoryCounts()` | Drives dynamic sidebar categories and `/category/:name`. |
+| `access` | No | `"Free" \| "Paid"` | `AppGrid.js`, `AppDetailView.js` | Access badge and Free/Paid catalog filter. |
+| `icon` | No | `https://...` | `AppGrid.js`, `AppDetailView.js` | Direct icon URL (falls back to 2-letter monogram). |
+| `installer` | No | `string \| { type?, script }` | `github.js`, `AppDetailView.js` | Shared default installer path or trusted `https://` script URL. |
+| `docs` | No | `{ features?, changelog? }` | `api/apps.js`, `github.js` | Repo-relative Markdown paths for ARIA documentation tabs. |
+| `platforms` | No | `string[]` | `AppDetailView.js` | Renders read-only **Platforms** specification row on `/app/:slug`. |
+| `architectures` | No | `string[]` | `AppDetailView.js` | Renders read-only **Architecture** specification row on `/app/:slug`. |
+| `screenshots` | No | `(https:// \| { url, alt? })[]` | `AppDetailView.js` | Renders lazy-loaded **Screenshots** gallery (strictly `https://`). |
+| `requirements` | No | `string[] \| Record<string, string>` | `AppDetailView.js` | Renders structured **System Requirements** card. |
+| `links` | No | `Record<string, https://>` | `AppDetailView.js` | Renders external buttons under **Resources & Links**. |
 
 ### Version Object (`versions.<versionKey>`)
 
-| Field | Required for `/dl/` | Type | Description |
+| Field | Required | Type | Description |
 | :--- | :---: | :--- | :--- |
-| `url` | **Yes** | `string` | Direct `https://` download URL (validated with `startsWith("https://")` in `functions/[[path]].js:214`). Extension determines the package format badge (`getPackageFormat()`). |
-| `sha256` | No | `string` | Hex SHA256 digest displayed with **Full/Hide** toggle (when length > 20) and one-click copy. |
-| `size` | No | `string` | Human-readable file size (e.g., `"42.8 MB"`). |
-| `released_at` | No | `string` | ISO date `YYYY-MM-DD`, formatted deterministically in UTC (e.g., `"Nov 15, 2026"`) via `formatReleaseDate()`. |
+| `url` | **Yes** | Trusted `https://` URL | Direct binary download target for `/dl/<slug>/<ver>` (validated by `isTrustedDownloadUrl()`). |
+| `installer` | No | `string \| { type?, script }` | Optional **per-version installer override** (repo path or trusted `https://` URL). |
+| `size` | No | `string` (max 32) | Human-readable file size (e.g. `"42.8 MB"`). |
+| `sha256` | No | `^[a-fA-F0-9]{64}$` | 64-char hex checksum displayed with **Full/Hide** toggle and copy button. |
+| `released_at` | No | `YYYY-MM-DD` | Strict UTC ISO release date formatted via `formatReleaseDate()`. |
+| `channel` | No | `"stable" \| "beta" \| "alpha"` | Shows `[beta]` / `[alpha]` tag in the version dropdown when non-stable. |
+| `deprecated` | No | `boolean` | Shows `(deprecated)` tag in the version dropdown when `true`. |
 
-### Complete Verified Example
+---
 
-```json
-{
-  "slug": "calgrid",
-  "name": "CalGrid",
-  "tagline": "Minimalist desktop calendar widget and event scheduler",
-  "icon": "https://dl.vib.tools/calgrid/icon.png",
-  "category": "Productivity",
-  "access": "Free",
-  "latest": "v1.0.3",
-  "installer": {
-    "type": "powershell",
-    "script": ".vibtools/installer.ps1"
-  },
-  "docs": {
-    "features": "features.md",
-    "changelog": "changelog.md"
-  },
-  "versions": {
-    "v1.0.3": {
-      "url": "https://dl.vib.tools/calgrid/v1.0.3/CalGrid-Setup-1.0.3.exe",
-      "size": "42.8 MB",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "released_at": "2026-11-15"
-    }
-  }
-}
-```
+## 3. PowerShell Installer Contract
 
-## 3. PowerShell Installer Contract (`.vibtools/installer.ps1`)
-
-When serving `GET https://get.vib.tools/<slug>` or `GET https://get.vib.tools/<slug>/<version>`, `functions/[[path]].js:292` prepends **exactly two** sanitized PowerShell variables (CRLF line endings):
+When serving `GET https://get.vib.tools/<slug>` or `GET https://get.vib.tools/<slug>/<version>`, `functions/[[path]].js` resolves the concrete target version, selects `versions[version].installer` (or root `installer`), and prepends **three** sanitized PowerShell variables (CRLF):
 
 ```powershell
 $APP_SLUG = "calgrid"
 $APP_VERSION = "v1.0.3"
+$APP_NAME = "CalGrid"
 ```
 
-- `$APP_VERSION` is always resolved to the concrete version key (e.g., `v1.0.3`), never the literal string `"latest"`.
-- `$APP_NAME` and `$DOWNLOAD_URL` are **NOT** injected by `functions/[[path]].js`. Scripts must derive download URLs from `$APP_SLUG` and `$APP_VERSION`:
+---
 
-```powershell
-$ErrorActionPreference = "Stop"
+## 4. Zero-Config Registration in `registry.json`
 
-$downloadUrl = "https://get.vib.tools/dl/$APP_SLUG/$APP_VERSION"
-$tempFile = Join-Path $env:TEMP "$APP_SLUG-$APP_VERSION-setup.exe"
-
-Write-Host "Downloading $APP_SLUG ($APP_VERSION)..." -ForegroundColor Cyan
-Invoke-WebRequest -Uri $downloadUrl -OutFile $tempFile
-Start-Process -FilePath $tempFile -Wait
-Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
-Write-Host "$APP_SLUG ($APP_VERSION) installed." -ForegroundColor Green
-```
-
-## 4. Registering in `registry.json`
-
-Add an entry to the root `registry.json` array in `vib-apps-hub` (`getRegistry()` also accepts `{ "apps": [...] }` object wrapping):
+Paste only the GitHub repository URL into root `registry.json` in `vib-apps-hub`:
 
 ```json
 [
-  {
-    "slug": "calgrid",
-    "repo": "vib-tools/calgrid",
-    "branch": "main",
-    "featured": true
-  }
+  "https://github.com/vib-tools/calgrid",
+  "https://github.com/vib-tools/devprompt"
 ]
 ```
 
-| Field | Required | Default | Description |
-| :--- | :---: | :--- | :--- |
-| `slug` | Yes | — | Case-insensitive lookup slug matching `app.config.json`. |
-| `repo` | Yes | — | GitHub `owner/name` repository path. |
-| `branch` | No | `"main"` | Target Git branch or ref passed as `?ref=` to GitHub Contents API. |
-| `featured` | No | `false` | Merged into the returned config object as `Boolean(entry.featured)`. |
+Supported entry forms (deduplicated automatically by `repo@branch` in `getRegistry()`):
+- `"https://github.com/owner/repo"` (or `.git` / `/tree/<branch>`)
+- `"owner/repo"`
+- `{ "repo": "https://github.com/owner/repo", "branch": "main", "featured": true, "slug": "optional-override" }`
+
+When `slug` is omitted, `resolveAppBySlug()` automatically discovers the app's `slug` from `.vibtools/apps/app.config.json`.
 
 ## Related Guides
 

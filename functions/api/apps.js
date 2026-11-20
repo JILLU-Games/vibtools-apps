@@ -5,12 +5,6 @@ import {
   fetchAppConfig,
   fetchAppDoc
 } from "../_lib/github.js";
-import {
-  getMockApps,
-  findMockApp,
-  getMockDoc,
-  isMockFallbackEnabled
-} from "../_lib/mockData.js";
 
 /**
  * Returns Cloudflare Edge Cache (caches.default) when available in the runtime.
@@ -38,10 +32,10 @@ function isGetDomainRequest(request, url) {
 }
 
 /**
- * Cloudflare Pages Function: Store API handler (/api/apps).
+ * Cloudflare Pages Function: Pure Repo-Only Store API handler (/api/apps).
  *
  * Supported modes:
- * - GET /api/apps -> Catalog list of all apps with their config metadata.
+ * - GET /api/apps -> Catalog list of all apps auto-collected from registry.json GitHub repos.
  * - GET /api/apps?slug=<slug> -> Single app metadata with full markdown documentation (features + changelog).
  *
  * @param {EventContext} context
@@ -74,6 +68,7 @@ export async function onRequestGet(context) {
 
   try {
     const cache = getEdgeCache();
+    const hasCustomRegistry = Array.isArray(env?.__REGISTRY_OVERRIDE);
 
     // Mode B: Single App Details & Markdown Docs
     if (slugParam !== null) {
@@ -93,7 +88,7 @@ export async function onRequestGet(context) {
       );
 
       // 1. Check Cloudflare Edge Cache for single-app detail response
-      if (cache) {
+      if (cache && !hasCustomRegistry) {
         try {
           const cachedDetail = await cache.match(detailCacheKey);
           if (cachedDetail) {
@@ -110,43 +105,22 @@ export async function onRequestGet(context) {
         } catch (_) {}
       }
 
-      let config = null;
-      let featuresMd = null;
-      let changelogMd = null;
-
       const resolvedApp = await resolveAppBySlug(slug, env, context);
-      if (resolvedApp) {
-        config = resolvedApp.config;
-        [featuresMd, changelogMd] = await Promise.all([
-          fetchAppDoc(resolvedApp.entry, config.docs?.features, env, context, "features.md"),
-          fetchAppDoc(resolvedApp.entry, config.docs?.changelog, env, context, "changelog.md")
-        ]);
-      }
-
-      const allowMock = isMockFallbackEnabled(request, env);
-      let catalogSource = "live";
-
-      // Fallback to sample app ONLY when mock fallback is explicitly enabled (or local/preview dev)
-      if (!config && allowMock) {
-        const mockApp = findMockApp(slug);
-        if (mockApp) {
-          const { installerScript, docsData, ...cleanMockConfig } = mockApp;
-          config = cleanMockConfig;
-          featuresMd = getMockDoc(slug, "features");
-          changelogMd = getMockDoc(slug, "changelog");
-          catalogSource = "mock";
-        }
-      }
-
-      if (!config) {
+      if (!resolvedApp) {
         return new Response(
           JSON.stringify({
             error: "Not Found",
-            message: `App with slug '${slug}' was not found in registry or catalog.`
+            message: `App with slug '${slug}' was not found in registry.`
           }),
           { status: 404, headers: { ...headers, "Cache-Control": "no-store" } }
         );
       }
+
+      const config = resolvedApp.config;
+      const [featuresMd, changelogMd] = await Promise.all([
+        fetchAppDoc(resolvedApp.entry, config.docs?.features, env, context, "features.md"),
+        fetchAppDoc(resolvedApp.entry, config.docs?.changelog, env, context, "changelog.md")
+      ]);
 
       const detailPayloadText = JSON.stringify({
         app: config,
@@ -156,10 +130,8 @@ export async function onRequestGet(context) {
         }
       });
 
-      const isCacheableLiveDetail = catalogSource === "live";
-
-      // 2. Store ONLY verified live single-app detail responses in Edge Cache (300s TTL)
-      if (cache && isCacheableLiveDetail) {
+      // 2. Store verified live single-app detail response in Edge Cache (300s TTL)
+      if (cache && !hasCustomRegistry) {
         try {
           const cacheResponse = new Response(detailPayloadText, {
             status: 200,
@@ -184,19 +156,18 @@ export async function onRequestGet(context) {
         status: 200,
         headers: {
           ...headers,
-          "Cache-Control": isCacheableLiveDetail ? "public, max-age=300" : "no-store",
-          "X-Cache-Status": isCacheableLiveDetail ? "MISS" : "BYPASS",
-          "X-Catalog-Source": catalogSource
+          "Cache-Control": "public, max-age=300",
+          "X-Cache-Status": hasCustomRegistry ? "BYPASS" : "MISS",
+          "X-Catalog-Source": "live"
         }
       });
     }
 
-    // Mode A: Catalog List of All Registered Apps
-    // 1. Check Cloudflare Edge Cache for aggregated catalog
+    // Mode A: Catalog List of All Registered GitHub Repositories
     const cacheKeyUrl = "https://apps.vib.tools/__cache/api/apps/catalog";
     const cacheKey = new Request(cacheKeyUrl);
 
-    if (cache) {
+    if (cache && !hasCustomRegistry) {
       try {
         const cachedRes = await cache.match(cacheKey);
         if (cachedRes) {
@@ -213,16 +184,25 @@ export async function onRequestGet(context) {
       } catch (_) {}
     }
 
-    const entries = getRegistry();
+    const entries = hasCustomRegistry ? getRegistry(env.__REGISTRY_OVERRIDE) : getRegistry();
 
     const results = await Promise.allSettled(
       entries.map((entry) => fetchAppConfig(entry, env, context))
     );
 
     const apps = [];
+    const seenSlugs = new Set();
     results.forEach((res, index) => {
       const entry = entries[index];
       if (res.status === "fulfilled" && res.value?.ok && res.value?.config) {
+        const slugKey = String(res.value.config.slug || "").trim().toLowerCase();
+        if (seenSlugs.has(slugKey)) {
+          console.warn(
+            `[Store API] Skipping duplicate slug '${slugKey}' from repository '${entry?.repo}'`
+          );
+          return;
+        }
+        seenSlugs.add(slugKey);
         apps.push(res.value.config);
       } else {
         const errorDetail =
@@ -230,28 +210,19 @@ export async function onRequestGet(context) {
             ? res.value?.error
             : res.reason?.message || "Unknown rejection";
         console.warn(
-          `[Store API] Skipping app '${entry?.slug || index}' (${entry?.repo}): ${errorDetail}`
+          `[Store API] Skipping app '${entry?.slug || entry?.repo || index}' (${entry?.repo}): ${errorDetail}`
         );
       }
     });
-
-    // Activate fallback catalog ONLY when permitted (never leak demo apps on live prod domains)
-    const allowMock = isMockFallbackEnabled(request, env);
-    let catalogSource = "live";
-    if (apps.length === 0 && allowMock) {
-      const mockApps = getMockApps();
-      apps.push(...mockApps);
-      catalogSource = "mock";
-    }
 
     const payloadText = JSON.stringify({
       apps,
       count: apps.length
     });
 
-    const isCacheableLiveCatalog = catalogSource === "live" && apps.length > 0;
+    const isCacheableLiveCatalog = apps.length > 0 && !hasCustomRegistry;
 
-    // 2. Store ONLY verified live catalogs in Edge Cache with 300s TTL (never poison cache with mock/empty data)
+    // Store ONLY non-empty live catalogs in Edge Cache with 300s TTL (never cache empty catalogs)
     if (cache && isCacheableLiveCatalog) {
       try {
         const cacheResponse = new Response(payloadText, {
@@ -279,7 +250,7 @@ export async function onRequestGet(context) {
         ...headers,
         "Cache-Control": isCacheableLiveCatalog ? "public, max-age=300" : "no-store",
         "X-Cache-Status": isCacheableLiveCatalog ? "MISS" : "BYPASS",
-        "X-Catalog-Source": catalogSource
+        "X-Catalog-Source": "live"
       }
     });
   } catch (err) {

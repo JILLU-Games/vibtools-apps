@@ -54,8 +54,8 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 48,
-      "pattern": "^[vV]?[0-9A-Za-z][0-9A-Za-z._+-]{0,47}$",
-      "description": "Default release version key. Must match an existing key inside versions."
+      "pattern": "^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$",
+      "description": "Default release version key. Must match an exact key inside versions."
     },
     "installer": {
       "$ref": "#/$defs/installerSpec",
@@ -69,12 +69,18 @@
         "features": {
           "type": "string",
           "minLength": 1,
-          "description": "Path to overview/features Markdown (defaults to .vibtools/apps/features.md)."
+          "not": {
+            "pattern": "(^|[/\\\\])\\.\\.([/\\\\]|$)|^[a-zA-Z][a-zA-Z0-9+.-]*:"
+          },
+          "description": "Safe repo-relative path to overview/features Markdown (defaults to .vibtools/apps/features.md)."
         },
         "changelog": {
           "type": "string",
           "minLength": 1,
-          "description": "Path to release changelog Markdown (defaults to .vibtools/apps/changelog.md)."
+          "not": {
+            "pattern": "(^|[/\\\\])\\.\\.([/\\\\]|$)|^[a-zA-Z][a-zA-Z0-9+.-]*:"
+          },
+          "description": "Safe repo-relative path to release changelog Markdown (defaults to .vibtools/apps/changelog.md)."
         }
       }
     },
@@ -103,6 +109,7 @@
       "oneOf": [
         {
           "type": "array",
+          "minItems": 1,
           "items": {
             "type": "string",
             "minLength": 1
@@ -160,7 +167,7 @@
       "additionalProperties": false,
       "description": "Map of version identifiers (e.g. v1.0.3) to release artifacts and optional per-version installers.",
       "patternProperties": {
-        "^[vV]?[0-9A-Za-z][0-9A-Za-z._+-]{0,47}$": {
+        "^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$": {
           "$ref": "#/$defs/versionRelease"
         }
       }

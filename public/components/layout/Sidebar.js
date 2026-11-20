@@ -72,6 +72,23 @@ export function Sidebar({
   });
   discoverSection.appendChild(cliLink);
 
+  // Schema & AI Docs link
+  const schemaLink = document.createElement("a");
+  schemaLink.href = "/schema";
+  schemaLink.className = "app-sidebar__link";
+  schemaLink.appendChild(Icon("file", 15));
+
+  const schemaText = document.createElement("span");
+  schemaText.className = "app-sidebar__link-label";
+  schemaText.textContent = "Schema & AI Docs";
+  schemaLink.appendChild(schemaText);
+
+  schemaLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    navigate("/schema");
+  });
+  discoverSection.appendChild(schemaLink);
+
   sidebar.appendChild(discoverSection);
 
   // 2. Categories section
@@ -161,6 +178,8 @@ export function Sidebar({
     allAppsLink.removeAttribute("aria-current");
     cliLink.classList.remove("is-active");
     cliLink.removeAttribute("aria-current");
+    schemaLink.classList.remove("is-active");
+    schemaLink.removeAttribute("aria-current");
 
     const categoryLinks = catListContainer.querySelectorAll(".app-sidebar__link");
     categoryLinks.forEach((l) => {
@@ -174,6 +193,9 @@ export function Sidebar({
     } else if (route.view === "cli") {
       cliLink.classList.add("is-active");
       cliLink.setAttribute("aria-current", "page");
+    } else if (route.view === "schema") {
+      schemaLink.classList.add("is-active");
+      schemaLink.setAttribute("aria-current", "page");
     } else if (route.view === "category" && route.category) {
       const safeCat = CSS.escape(route.category.toLowerCase());
       const target = catListContainer.querySelector(

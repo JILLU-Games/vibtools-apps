@@ -60,7 +60,8 @@ const MIME_TYPES = {
   ".png": "image/png",
   ".ico": "image/x-icon",
   ".txt": "text/plain; charset=utf-8",
-  ".md": "text/markdown; charset=utf-8"
+  ".md": "text/markdown; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8"
 };
 
 /**
@@ -124,12 +125,14 @@ export async function serveStaticAsset(input) {
  * Handles an incoming Web Request by routing it through the Cloudflare Pages Functions pipeline.
  *
  * @param {Request} webRequest
+ * @param {object} [envOverrides]
  * @returns {Promise<Response>}
  */
-export async function handleEdgeRequest(webRequest) {
+export async function handleEdgeRequest(webRequest, envOverrides = {}) {
   const url = new URL(webRequest.url);
   const env = {
     ...process.env,
+    ...envOverrides,
     ASSETS: {
       fetch: (reqOrUrl) => serveStaticAsset(reqOrUrl)
     }

@@ -63,8 +63,7 @@ apps.vib.tools/
 ├── functions/                     # Cloudflare Pages Functions (Edge API)
 │   ├── [[path]].js                # Wildcard host and route dispatcher
 │   ├── _lib/                      # Private internal utilities
-│   │   ├── github.js              # GitHub REST API client & cache layer
-│   │   └── mockData.js            # Offline sample fallback catalog & installer engine
+│   │   └── github.js              # GitHub REST API client, Frozen v1 validator & cache layer
 │   └── api/                       # REST endpoints
 │       └── apps.js                # Aggregator for app catalogue metadata
 ├── project/                       # Internal technical specifications & logs

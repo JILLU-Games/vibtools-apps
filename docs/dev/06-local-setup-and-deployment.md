@@ -121,7 +121,7 @@ Attach both custom domains to the **same** Cloudflare Pages project under **Cust
 
 | Symptom | Verified Cause | Resolution |
 | :--- | :--- | :--- |
-| Only 3 sample apps (`CalGrid`, `DevPrompt`, `VibClip`) appear | All `registry.json` repos failed to fetch (placeholder `example-app`, missing `GITHUB_TOKEN`, or missing `.vibtools/apps/app.config.json`), activating `mockData.js` fallback. | Register real repositories in `registry.json`, verify `.vibtools/apps/app.config.json`, and configure `GITHUB_TOKEN` for private repos. |
+| Catalog shows `"No applications registered yet"` (`apps: []`) | `registry.json` is empty `[]`, or registered repositories failed validation / GitHub fetch (missing `.vibtools/apps/app.config.json` or missing `GITHUB_TOKEN` for private repos). | Add GitHub repo URLs to `registry.json`, ensure each repo has a valid Frozen v1 `.vibtools/apps/app.config.json` (see `/schema`), and configure `GITHUB_TOKEN` for private repos. |
 | New release not immediately visible | Cloudflare `caches.default` caches GitHub files and `/api/apps` Mode A for `300s` (`max-age=300`). | Wait up to 5 minutes or purge Cloudflare cache. |
 | `404` on `/dl/<slug>/<version>` | Version missing from `versions` or `versions.<ver>.url` missing / not starting with `https://`. | Check `versions` keys and ensure `url` begins with `https://`. |
 | `502` on `get.vib.tools/<slug>` | App config loaded, but `fetchAppInstaller()` failed to fetch `.vibtools/installer.ps1` (and fallback `.vibtools/install.ps1`). | Verify installer file path in the app repository and `GITHUB_TOKEN` permissions. |

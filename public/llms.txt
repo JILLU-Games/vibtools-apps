@@ -1,0 +1,19 @@
+# Vib Apps (`apps.vib.tools` & `get.vib.tools`)
+
+> Central zero-build software marketplace, frozen `.vibtools/apps/app.config.json` schema engine, PowerShell CLI installer router, and direct binary download gateway for Vib Tools applications.
+
+## Machine-Readable Schema & AI Agent Specs
+- [Single-URL AI Master Bundle (`llms-full.txt`)](https://apps.vib.tools/llms-full.txt): Complete self-contained specification, step matrix, templates, and 12-point checklist in ONE file for single-fetch AI agents.
+- [Frozen JSON Schema (v1)](https://apps.vib.tools/schemas/vibtools-app.schema.json): Canonical Draft 2020-12 JSON Schema (`schemaVersion: 1`, `additionalProperties: false`) for `.vibtools/apps/app.config.json`.
+- [Vib Apps Engine AI Spec (`llms.txt`)](https://apps.vib.tools/vib-apps-engine/llms.txt): Compact single-file instruction sheet for AI coding agents to create and verify `.vibtools/apps/` inside any project repository.
+- [Complete A–Z Setup Guide](https://apps.vib.tools/vib-apps-engine/vibtools-app-config.md): Basic-to-advanced step-by-step guide covering repo URL registration, per-version installers, Markdown docs, SHA256 checksums, and security rules.
+- [AI Agent Execution Playbook](https://apps.vib.tools/vib-apps-engine/ai-guide.md): Deterministic MUST/MUST NOT rules, templates, and copy-paste prompt for AI-assisted onboarding.
+
+## Live Platform Endpoints
+- Storefront UI: https://apps.vib.tools
+- Interactive Schema & AI Docs UI: https://apps.vib.tools/schema
+- Store Catalog API: https://apps.vib.tools/api/apps
+- Single App Detail API: https://apps.vib.tools/api/apps?slug=<slug>
+- PowerShell CLI Installer (Latest): `irm "https://get.vib.tools/<slug>" | iex`
+- PowerShell CLI Installer (Pinned Version): `irm "https://get.vib.tools/<slug>/<version>" | iex`
+- Direct Binary Download Redirect: https://get.vib.tools/dl/<slug>/<version>

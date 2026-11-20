@@ -4,11 +4,6 @@ import {
   fetchAppInstaller,
   isTrustedDownloadUrl
 } from "./_lib/github.js";
-import {
-  findMockApp,
-  getMockInstaller,
-  isMockFallbackEnabled
-} from "./_lib/mockData.js";
 
 export { isTrustedDownloadUrl };
 
@@ -88,6 +83,8 @@ export async function onRequestGet(context) {
       const isApi = pathname === "/api" || pathname.startsWith("/api/");
       const isKnownSpaRoute =
         pathname === "/cli" ||
+        pathname === "/schema" ||
+        pathname === "/vib-apps-engine" ||
         pathname.startsWith("/app/") ||
         pathname.startsWith("/category/");
       const isStaticAssetPath = !isKnownSpaRoute && STATIC_ASSET_EXT_RE.test(pathname);
@@ -109,7 +106,10 @@ export async function onRequestGet(context) {
     // Attach public CORS headers for machine-readable schema & AI spec endpoints
     if (
       res.status === 200 &&
-      (url.pathname.startsWith("/schemas/") || url.pathname.startsWith("/vib-apps-engine/"))
+      (url.pathname === "/llms.txt" ||
+        url.pathname === "/llms-full.txt" ||
+        url.pathname.startsWith("/schemas/") ||
+        url.pathname.startsWith("/vib-apps-engine/"))
     ) {
       const publicHeaders = new Headers(res.headers);
       publicHeaders.set("Access-Control-Allow-Origin", "*");
@@ -221,20 +221,8 @@ export async function onRequestGet(context) {
       });
     }
 
-    const allowMock = isMockFallbackEnabled(request, env);
-    let config = null;
     const resolvedApp = await resolveAppBySlug(slug, env, context);
-    if (resolvedApp) {
-      config = resolvedApp.config;
-    }
-
-    // Fallback to sample app ONLY when mock fallback is permitted
-    if (!config && allowMock) {
-      const mockApp = findMockApp(slug);
-      if (mockApp) {
-        config = mockApp;
-      }
-    }
+    const config = resolvedApp?.config || null;
 
     if (!config) {
       return new Response(`App '${slug}' was not found in registry.\n`, {
@@ -285,37 +273,17 @@ export async function onRequestGet(context) {
       });
     }
 
-    const allowMock = isMockFallbackEnabled(request, env);
-    let entry = null;
-    let config = null;
-    let installerScript = null;
-    let canonicalSlug = slug;
-    let scriptSource = "live";
-
     const resolvedApp = await resolveAppBySlug(slug, env, context);
-    if (resolvedApp) {
-      entry = resolvedApp.entry;
-      config = resolvedApp.config;
-      canonicalSlug = config.slug || entry.slug || slug;
-    }
-
-    // Fallback to sample app ONLY when mock fallback is permitted
-    if (!config && allowMock) {
-      const mockApp = findMockApp(slug);
-      if (mockApp) {
-        config = mockApp;
-        canonicalSlug = mockApp.slug;
-        installerScript = getMockInstaller(mockApp.slug);
-        scriptSource = "mock";
-      }
-    }
-
-    if (!config) {
+    if (!resolvedApp) {
       return new Response(`App '${slug}' was not found in registry.\n`, {
         status: 404,
         headers: { "Content-Type": "text/plain; charset=utf-8" }
       });
     }
+
+    const entry = resolvedApp.entry;
+    const config = resolvedApp.config;
+    const canonicalSlug = config.slug || entry.slug || slug;
 
     // Resolve target version (latest or explicit) BEFORE loading installer so per-version overrides apply
     const resolvedVer = resolveVersion(config.versions, requestedVersion, config.latest);
@@ -332,16 +300,15 @@ export async function onRequestGet(context) {
     const targetVersion = resolvedVer.versionKey;
     const versionData = resolvedVer.versionData;
 
-    if (scriptSource === "live" && entry) {
-      const instRes = await fetchAppInstaller(entry, config, env, context, versionData);
-      if (instRes.ok) {
-        installerScript = instRes.script;
-      } else if (instRes.status === 403) {
-        return new Response(`Untrusted or invalid installer URL configured for app '${slug}'.\n`, {
-          status: 403,
-          headers: { "Content-Type": "text/plain; charset=utf-8" }
-        });
-      }
+    let installerScript = null;
+    const instRes = await fetchAppInstaller(entry, config, env, context, versionData);
+    if (instRes.ok) {
+      installerScript = instRes.script;
+    } else if (instRes.status === 403) {
+      return new Response(`Untrusted or invalid installer URL configured for app '${slug}'.\n`, {
+        status: 403,
+        headers: { "Content-Type": "text/plain; charset=utf-8" }
+      });
     }
 
     if (!installerScript) {
@@ -351,9 +318,9 @@ export async function onRequestGet(context) {
       });
     }
 
-    // Sanitize canonical slug, targetVersion, and appName before interpolating into PowerShell variables
+    // Sanitize canonical slug, targetVersion (preserving valid semver '+' build metadata), and appName
     const safeSlug = (canonicalSlug || slug).replace(/[^a-zA-Z0-9._-]/g, "");
-    const safeVersion = String(targetVersion).replace(/[^a-zA-Z0-9._-]/g, "");
+    const safeVersion = String(targetVersion).replace(/[^a-zA-Z0-9._+-]/g, "");
     const safeName = String(config.name || canonicalSlug || slug).replace(/[^a-zA-Z0-9 ._()-]/g, "");
 
     const injectedHeader = `$APP_SLUG = "${safeSlug}"\r\n$APP_VERSION = "${safeVersion}"\r\n$APP_NAME = "${safeName}"\r\n\r\n`;
@@ -363,8 +330,8 @@ export async function onRequestGet(context) {
       status: 200,
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": scriptSource === "live" ? "public, max-age=300" : "no-store",
-        "X-Catalog-Source": scriptSource
+        "Cache-Control": "public, max-age=300",
+        "X-Catalog-Source": "live"
       }
     });
   }

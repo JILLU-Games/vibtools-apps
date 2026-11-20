@@ -1,44 +1,70 @@
-# Vib Apps Engine — AI & Developer Specification
+# Vib Apps Engine — Compact AI Agent Specification (`schemaVersion: 1`)
 
-> Canonical Schema: https://apps.vib.tools/schemas/vibtools-app.schema.json
-> Full Guide: https://apps.vib.tools/vib-apps-engine/vibtools-app-config.md
-> Storefront: https://apps.vib.tools
-> Edge Installer & Download Router: https://get.vib.tools
+> Canonical Frozen Schema: https://apps.vib.tools/schemas/vibtools-app.schema.json
+> Complete A–Z Human & Dev Guide: https://apps.vib.tools/vib-apps-engine/vibtools-app-config.md
+> AI Execution Playbook & Prompt: https://apps.vib.tools/vib-apps-engine/ai-guide.md
+> Storefront: https://apps.vib.tools | Edge CLI & Download Router: https://get.vib.tools
 
-## Purpose
-Any GitHub repository (public or private) can publish an application to `apps.vib.tools` and `get.vib.tools` simply by adding `.vibtools/apps/app.config.json` inside the repository and adding its GitHub repository URL to `registry.json` in `vib-apps-hub`.
+## 1. Mission & Zero-Touch Auto-Collection Model
+When a developer adds a GitHub repository URL to `registry.json` inside `vib-apps-hub` (e.g. `"https://github.com/owner/repo"`), the edge worker automatically:
+1. Parses `owner/repo` (and optional `/tree/<branch>`, default `"main"`).
+2. Fetches `.vibtools/apps/app.config.json` from that repo via GitHub Contents API (cached 300s at Cloudflare Edge; 404 fallback: `.vibtools/app.config.json`).
+3. Validates the JSON strictly against Frozen Schema `v1` (`schemaVersion: 1`, `additionalProperties: false`).
+4. Auto-discovers the app `slug`, catalog metadata, version list, and Markdown tabs (`features.md`, `changelog.md`).
+5. Routes `https://get.vib.tools/<slug>[/<version>]` to the version's installer script (per-version override or root default) with `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` prepended, and routes `https://get.vib.tools/dl/<slug>[/<version>]` via 302 redirect to the version's verified HTTPS binary URL.
 
-## Required Repository Layout
+## 2. Target Repository Directory Layout
+Create the following self-contained folder at the root of the application repository:
 ```text
-<app-repository-root>/
+<app-repo-root>/
 └── .vibtools/
     └── apps/
-        ├── app.config.json    # Required — conforms strictly to vibtools-app.schema.json (schemaVersion: 1)
-        ├── installer.ps1      # Default PowerShell installer script (or provide an HTTPS URL in installer)
-        ├── features.md        # Markdown rendered in the "Features & Overview" tab
-        └── changelog.md       # Markdown rendered in the "Release Changelog" tab
+        ├── app.config.json    # REQUIRED — Frozen v1 manifest
+        ├── installer.ps1      # Default PowerShell installer (omit if using remote HTTPS installer URL)
+        ├── features.md        # Markdown rendered in "Features & Overview" tab
+        └── changelog.md       # Markdown rendered in "Release Changelog" tab
 ```
 
-## Frozen Schema Contract (schemaVersion: 1)
-- Do NOT invent custom keys (`additionalProperties: false` is enforced on root and version objects).
-- Always include:
-  - `"$schema": "https://apps.vib.tools/schemas/vibtools-app.schema.json"`
-  - `"schemaVersion": 1`
-  - `"slug"` (`^[a-z0-9][a-z0-9-_]{0,63}$`)
-  - `"name"` (display name)
-  - `"latest"` (must match an exact key in `versions`)
-  - `"versions"` (object map of version keys to release objects)
-- Each version object under `versions.<ver>` requires:
-  - `"url"`: direct `https://` download URL on a trusted host (`dl.vib.tools`, `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com`, or configured `ALLOWED_DOWNLOAD_HOSTS`).
-- Optional version fields:
-  - `"installer"`: per-version installer override (repo-relative path like `.vibtools/apps/installers/v1.0.2.ps1`, trusted `https://` script URL, or `{ "type": "powershell", "script": "..." }`). When omitted, inherits the root `installer`.
-  - `"size"`: e.g. `"42.8 MB"`
-  - `"sha256"`: 64-char hex checksum
-  - `"released_at"`: strict `"YYYY-MM-DD"` (do NOT use `releaseDate`)
-  - `"channel"`: `"stable" | "beta" | "alpha"`
-  - `"deprecated"`: `true | false`
+## 3. Strict Frozen Schema Contract (`schemaVersion: 1`)
+HARD INVARIANTS (violating any rule causes HTTP 422 rejection and hides the app from the catalog):
+- MUST NOT invent custom keys on root or inside `versions.<ver>` (`additionalProperties: false`).
+- MUST include `"$schema": "https://apps.vib.tools/schemas/vibtools-app.schema.json"` and `"schemaVersion": 1`.
+- MUST include required root keys: `"slug"`, `"name"`, `"latest"`, `"versions"`.
+- `"slug"` MUST be lowercase `^[a-z0-9][a-z0-9-_]{0,63}$`.
+- `"name"` MUST be 1–80 chars; `"tagline"` (optional) max 160 chars; `"category"` (optional) max 48 chars.
+- `"access"` (optional) MUST be `"Free"` or `"Paid"`.
+- `"latest"` MUST match an EXACT key inside `"versions"` (e.g. `"v1.0.3"` === `"v1.0.3"`).
+- Every key inside `"versions"` MUST match `^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$` (must begin with a digit after optional `v`).
+- Every version object MUST include `"url"` starting with `https://` on a trusted host:
+  - Default trusted binary hosts: `dl.vib.tools`, `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com` (plus `env.ALLOWED_DOWNLOAD_HOSTS`).
+  - Default trusted remote installer hosts: all above + `raw.githubusercontent.com`.
+- Every `"released_at"` MUST be a real calendar ISO date `"YYYY-MM-DD"` (e.g. `"2026-02-31"` is rejected; NEVER use `"releaseDate"`).
+- Every `"sha256"` MUST be an exact 64-character hexadecimal string (`^[a-fA-F0-9]{64}$`).
+- `"channel"` (optional) MUST be `"stable"`, `"beta"`, or `"alpha"`. `"deprecated"` (optional) MUST be boolean.
+- `"icon"`, `"screenshots"`, and `"links"` values MUST start with `https://`.
+- `"platforms"` and `"architectures"` (optional) MUST contain unique non-empty strings.
+- `"installer"` (root or per-version) and `"docs"` paths MUST NOT contain `..` traversal segments or non-`https://` URI schemes.
 
-## Minimal Valid Example (.vibtools/apps/app.config.json)
+### Allowed Root Keys (Exact Frozen List)
+`$schema`, `schemaVersion`, `slug`, `name`, `tagline`, `category`, `access`, `icon`, `latest`, `installer`, `docs`, `platforms`, `architectures`, `requirements`, `screenshots`, `links`, `versions`
+
+### Allowed Version Keys (Exact Frozen List)
+`url`, `installer`, `size`, `sha256`, `released_at`, `channel`, `deprecated`
+
+## 4. Per-Version Installer Inheritance & Override Rules
+Resolution order when a user runs `irm "https://get.vib.tools/<slug>[/<version>]" | iex`:
+1. `versions[targetVersion].installer` (if present — string path, trusted `https://` URL, or `{ "type": "powershell", "script": "..." }`).
+2. Root `installer` (string path, trusted `https://` URL, or `{ "type": "powershell", "script": "..." }`).
+3. Repo defaults: `.vibtools/apps/installer.ps1` -> `.vibtools/installer.ps1` -> `.vibtools/install.ps1`.
+
+Before streaming the script, `get.vib.tools` prepends three sanitized PowerShell variables:
+```powershell
+$APP_SLUG = "calgrid"
+$APP_VERSION = "v1.0.3"
+$APP_NAME = "CalGrid"
+```
+
+## 5. Canonical Production Template (`.vibtools/apps/app.config.json`)
 ```json
 {
   "$schema": "https://apps.vib.tools/schemas/vibtools-app.schema.json",
@@ -60,45 +86,82 @@ Any GitHub repository (public or private) can publish an application to `apps.vi
   },
   "platforms": ["Windows 10/11"],
   "architectures": ["x64"],
+  "requirements": ["Windows 10 / 11 (64-bit)", "PowerShell 5.1+"],
+  "links": {
+    "docs": "https://docs.vib.tools/calgrid"
+  },
   "versions": {
     "v1.0.3": {
       "url": "https://dl.vib.tools/calgrid/v1.0.3/CalGrid-Setup-1.0.3.exe",
       "size": "42.8 MB",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "released_at": "2026-11-15"
+      "released_at": "2026-11-15",
+      "channel": "stable"
     },
     "v1.0.2": {
       "url": "https://dl.vib.tools/calgrid/v1.0.2/CalGrid-Setup-1.0.2.exe",
       "installer": "https://dl.vib.tools/calgrid/v1.0.2/install.ps1",
       "size": "41.5 MB",
       "sha256": "9f83c605d4c82c3dd9e3b909c29fca53ca74c70284c717ec010746ff79c57c4c",
-      "released_at": "2026-10-28"
+      "released_at": "2026-10-28",
+      "deprecated": true
     }
   }
 }
 ```
 
-## Edge Installer Contract (get.vib.tools)
-When a user runs:
-- `irm "https://get.vib.tools/<slug>" | iex` (installs `latest`)
-- `irm "https://get.vib.tools/<slug>/<version>" | iex` (installs specific version)
-
-`get.vib.tools` resolves the target version, picks `versions[version].installer` (or falls back to root `installer`), and prepends three sanitized PowerShell variables before streaming the script:
+## 6. Canonical PowerShell Installer Template (`.vibtools/apps/installer.ps1`)
 ```powershell
-$APP_SLUG = "calgrid"
-$APP_VERSION = "v1.0.3"
-$APP_NAME = "CalGrid"
+$ErrorActionPreference = "Stop"
+if (-not $APP_SLUG) { $APP_SLUG = "calgrid" }
+if (-not $APP_VERSION) { $APP_VERSION = "v1.0.3" }
+if (-not $APP_NAME) { $APP_NAME = "CalGrid" }
+
+$DownloadUrl = "https://get.vib.tools/dl/$APP_SLUG/$APP_VERSION"
+$TempFile = Join-Path $env:TEMP "$APP_SLUG-$APP_VERSION-setup.exe"
+
+Write-Host "==> Downloading $APP_NAME ($APP_VERSION)..." -ForegroundColor Cyan
+try {
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempFile -UseBasicParsing
+    Write-Host "==> Launching installer..." -ForegroundColor Green
+    Start-Process -FilePath $TempFile -Wait
+} finally {
+    if (Test-Path $TempFile) {
+        Remove-Item -Path $TempFile -Force -ErrorAction SilentlyContinue
+    }
+}
+Write-Host "==> $APP_NAME ($APP_VERSION) installed." -ForegroundColor Green
 ```
 
-Direct binary downloads route through:
-- `https://get.vib.tools/dl/<slug>` -> 302 redirect to `versions[latest].url`
-- `https://get.vib.tools/dl/<slug>/<version>` -> 302 redirect to `versions[version].url`
-
-## Registering a Repository in vib-apps-hub
-Add the GitHub repository URL directly to `registry.json`:
+## 7. Registering the Repo in `vib-apps-hub` (`registry.json`)
+Paste only the GitHub repository URL into `registry.json`:
 ```json
 [
-  "https://github.com/vib-tools/calgrid"
+  "https://github.com/owner/repo"
 ]
 ```
-The hub automatically extracts `owner/repo`, fetches `.vibtools/apps/app.config.json`, discovers `slug`, loads Markdown docs, and routes every version and installer.
+Optional object form (only needed for non-`main` branch or `featured: true`):
+```json
+[
+  {
+    "repo": "https://github.com/owner/repo",
+    "branch": "main",
+    "featured": true
+  }
+]
+```
+
+## 8. Mandatory 12-Point AI Self-Verification Checklist
+Before concluding, verify every item:
+1. `.vibtools/apps/app.config.json` is valid UTF-8 JSON (no comments, no trailing commas).
+2. `"$schema"` is `"https://apps.vib.tools/schemas/vibtools-app.schema.json"` and `"schemaVersion"` is `1`.
+3. Every root key is in the exact allowed list (zero extra/custom keys).
+4. `"slug"` is strictly lowercase matching `^[a-z0-9][a-z0-9-_]{0,63}$`.
+5. `"latest"` matches an EXACT key in `"versions"`.
+6. Every key in `"versions"` starts with a digit after optional `v` (e.g. `v1.0.0`, `1.0.0`).
+7. Every version object contains ONLY allowed keys and has a trusted `https://` `"url"`.
+8. Every `"released_at"` is strict `"YYYY-MM-DD"` (never `releaseDate`).
+9. Every `"sha256"` (if present) is an exact 64-character hex string.
+10. Every `"installer"` (root or per-version) points to an existing repo file or trusted `https://` URL.
+11. `.vibtools/apps/installer.ps1` uses `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` without hardcoding stale versions.
+12. `.vibtools/apps/features.md` and `.vibtools/apps/changelog.md` exist, use clean Markdown headings, and contain zero unsafe raw HTML.

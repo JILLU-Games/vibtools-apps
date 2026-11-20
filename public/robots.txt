@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+
+# Machine-readable AI & Schema Specifications
+# LLMs Index: https://apps.vib.tools/llms.txt
+# LLMs Full Bundle (Single-URL): https://apps.vib.tools/llms-full.txt
+# Vib Apps Engine Spec: https://apps.vib.tools/vib-apps-engine/llms.txt
+# Frozen JSON Schema (v1): https://apps.vib.tools/schemas/vibtools-app.schema.json
+
+Sitemap: https://apps.vib.tools/sitemap.xml

@@ -302,26 +302,42 @@ export function AppGrid({
     const empty = document.createElement("div");
     empty.className = "app-grid__empty";
 
+    const isCatalogEmpty = total === 0 && !hasActiveFilters;
+
     const emptyIcon = document.createElement("div");
     emptyIcon.className = "app-grid__empty-icon";
-    emptyIcon.appendChild(Icon("search", 24));
+    emptyIcon.appendChild(Icon(isCatalogEmpty ? "package" : "search", 24));
     empty.appendChild(emptyIcon);
 
     const emptyTitle = document.createElement("h2");
     emptyTitle.className = "app-grid__empty-title";
-    emptyTitle.textContent = "No matching applications";
+    emptyTitle.textContent = isCatalogEmpty
+      ? "No applications registered yet"
+      : "No matching applications";
     empty.appendChild(emptyTitle);
 
     const emptyDesc = document.createElement("p");
     emptyDesc.className = "app-grid__empty-desc";
-    if (searchQuery && searchQuery.trim()) {
+    if (isCatalogEmpty) {
+      emptyDesc.textContent =
+        "Add any GitHub repository URL with .vibtools/apps/app.config.json to registry.json to auto-sync applications here.";
+    } else if (searchQuery && searchQuery.trim()) {
       emptyDesc.textContent = `No applications matched "${searchQuery.trim()}" with the current filters.`;
     } else {
       emptyDesc.textContent = "No applications are currently available for this filter selection.";
     }
     empty.appendChild(emptyDesc);
 
-    if (hasActiveFilters && typeof onResetFilters === "function") {
+    if (isCatalogEmpty) {
+      const schemaCta = Button({
+        label: "Schema & AI Setup Docs",
+        icon: "file",
+        variant: "primary",
+        size: "sm",
+        onClick: () => navigate("/schema")
+      });
+      empty.appendChild(schemaCta);
+    } else if (hasActiveFilters && typeof onResetFilters === "function") {
       const clearBtn = Button({
         label: "Clear all filters",
         icon: "rotate",

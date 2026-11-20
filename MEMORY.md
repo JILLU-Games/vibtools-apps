@@ -2,25 +2,30 @@
 
 > **Active Project:** `vib-apps-hub`  
 > **Target Domains:** `apps.vib.tools` (App Catalog) & `get.vib.tools` (Edge CLI & Direct Download Router)  
-> **Last Updated:** 2026-11-19 (Cycle 2 Production Hardening Completed — 4/4 Phases, 18/18 Bugs Closed)
+> **Last Updated:** 2026-11-19 (100% Pure Repo-Only Mode Enforced + Frozen Schema v1 + Forensic Audit Passes 1–3 + Interactive `/schema` Hub)
 
 ---
 
 ## 1. Current Status
 
-- **Project Status:** **Production-Hardened & Ready for Cloudflare Pages Deployment** (Cycle 2 **4 / 4 Phases Completed**, **18 / 18 Bugs Closed**, `npm test` **29 / 29 PASS**)
+- **Project Status:** **100% Pure Repo-Only, Production-Hardened, Frozen Schema v1 Verified & AI/SEO Ready** (Cycle 2 **4 / 4 Phases**, **18 / 18 Bugs Closed**, Frozen Schema v1 + Deep Forensic Audit Passes 1–3 **100% Remediated**, Demo/Mock Fallback **Completely Removed**)
 - **Git Repository:** `https://github.com/JILLU-Games/vibtools-apps.git` (Pushed to branch `main`)
-- **Active / Next Phase:** Operational Production Launch (populate live app entries in `registry.json`, configure `GITHUB_TOKEN` secret in Cloudflare Pages, and bind `apps.vib.tools` & `get.vib.tools`)
+- **Active / Next Phase:** Operational Production Launch (paste live GitHub repo URLs into `registry.json`, configure `GITHUB_TOKEN` secret in Cloudflare Pages, and bind `apps.vib.tools` & `get.vib.tools`)
 - **Completed BugFix & Refinement Phases:**
-  - Cycle 1 Phases 1–4 (Mock Engine, Edge Routing/CORS, Frontend UI Parity, Caching/PWA)
+  - Cycle 1 Phases 1–4 (Edge Routing/CORS, Frontend UI Parity, Caching/PWA)
   - Node.js 22 Edge Emulator & Dev Server (`server.js` & `package.json` on Port 3000)
-  - Production Marketplace UI/UX Audit & Refinement
+  - Production Marketplace UI/UX Audit & Refinement + Compact `1px` Global Scrollbars / Clean Sidebar
   - Vib Docs Engine Dual-Portal Configuration (`.vibtools/docs.config.json`, `docs/users/`, `docs/dev/`)
-  - **Cycle 2 Phase 1 (2026-11-19):** Production Data, Security & Crash Hardening (`BUG-01`–`BUG-05`: env-gated `isMockFallbackEnabled` + zero mock cache poisoning, `$APP_NAME` + real `Invoke-WebRequest`/SHA256 demo scripts, safe `decodeURIComponent` `400` handling, `isTrustedDownloadUrl` HTTPS host allowlist `403`, `isValidSlug` + `Object.hasOwn` enforcement across `get.vib.tools`, `Cache-Control: no-store` on API errors)
-  - **Cycle 2 Phase 2 (2026-11-19):** Backend Edge Engine, Caching & Routing Parity (`BUG-06`–`BUG-11`: live-only Mode B `caches.default` `300s` TTL with `X-Cache-Status`/`X-Catalog-Source`, single clean SPA `Content-Type` header, browser `302` redirect for `get.vib.tools/<slug>/<version>`, `get.vib.tools` `/api/apps` `404` domain isolation on `GET`/`OPTIONS`, dot-safe SPA reload routing for `/category/Node.js` & `/category/.NET` vs real missing static asset `404`, deep `validateAppConfig()` `422` validation, and `server.js` `405 Method Not Allowed` with `Allow: GET, HEAD`)
-  - **Cycle 2 Phase 3 (2026-11-19):** Frontend Real Functionality, SPA State & Public Asset Hygiene (`BUG-12`–`BUG-16`: honest read-only Platforms & Architecture metadata rows replacing non-functional selects, removal of exposed `public/assets/aistudio/`, placeholder `site.webmanifest`, and unused `styles.css`, full `pathname + search` navigation comparison + `?q=` `popstate` sync, `AbortController` + `isConnected` race protection in `AppDetailView.js`/`api.js`/`app.js`, and environment-aware `buildDownloadUrl()`; verified `25/25` in headless Chromium)
-  - **Cycle 2 Phase 4 (2026-11-19):** PWA Polish & Full Automated Regression Test Suite (`BUG-17`–`BUG-18`: `public/sw.js` cache bumped to `vib-apps-hub-v3` with complete `manifest.json` icon precaching + early non-`GET`/non-HTTP fetch guard; `npm test` runs both backend & frontend suites with full 18-bug regression coverage — `29/29 PASS`)
-- **Execution Strategy:** Cycle 2 4-Phase Sequential Roadmap — **Completed 4/4** (`notes/phases/phase_tracker.md`)
+  - **Cycle 2 Phases 1–4 (2026-11-19):** Full 18-bug production hardening (`BUG-01`–`BUG-18`)
+  - **Frozen Vib Apps Engine Schema (`schemaVersion: 1`) + Deep Forensic Audit Passes 1–3 (2026-11-19):**
+    - Locked Draft 2020-12 JSON Schema (`public/schemas/vibtools-app.schema.json`) + 100% runtime validation parity in `validateAppConfig()` (strict lowercase slug, exact `latest`, digit-leading version keys blocking prototype names, calendar-valid `YYYY-MM-DD`, `uniqueItems` on `platforms`/`architectures`, traversal & non-HTTPS scheme blocks on `installer`/`docs`, malformed `https://` rejection, multi-branch `resolveAppBySlug`).
+    - Zero-config URL-only `registry.json` auto-discovery (`parseRepoIdentifier`, deduplicated `getRegistry`, `resolveAppBySlug`, Mode A slug deduplication, per-version `installer` override + `$APP_SLUG`/`$APP_VERSION`/`$APP_NAME` injection with semver `+` metadata preservation).
+    - Full CORS-enabled (`*`) AI & SEO documentation suite (`/llms.txt`, `/llms-full.txt`, `/schemas/vibtools-app.schema.json`, `/vib-apps-engine/llms.txt`, `/vib-apps-engine/vibtools-app-config.md`, `/vib-apps-engine/ai-guide.md`, `/robots.txt`, `/sitemap.xml`, interactive `/schema` hub `SchemaGuideSection.js`, `index.html` canonical/llms/JSON-LD) synchronized across `docs/dev/01–08`, `index.md`, and `docs/MANIFEST.md`.
+  - **100% Pure Repo-Only Mode (2026-11-19):**
+    - Permanently deleted `functions/_lib/mockData.js` and removed placeholder `example-app` from `registry.json` (now clean `[]`).
+    - Removed all mock/demo fallback paths from `functions/api/apps.js`, `functions/[[path]].js`, and `.env.example` so apps sync strictly from GitHub repos listed in `registry.json` with `.vibtools/apps/app.config.json`.
+    - Updated `AppGrid.js` empty catalog state with a clear `"No applications registered yet"` message and `"Schema & AI Setup Docs"` CTA button navigating directly to `/schema`.
+- **Execution Strategy:** Cycle 2 4-Phase Sequential Roadmap — **Completed 4/4** (`notes/phases/phase_tracker.md`) + Forensic Audit Report (`notes/vibtools_schema_forensic_audit.md`)
 
 ---
 

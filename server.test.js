@@ -14,9 +14,78 @@ import {
   fetchAppDoc,
   isTrustedInstallerUrl
 } from "./functions/_lib/github.js";
-import { getMockApps, findMockApp } from "./functions/_lib/mockData.js";
 import { isTrustedDownloadUrl } from "./functions/[[path]].js";
 import { onRequestGet as appsApiGet, onRequestOptions as appsApiOptions } from "./functions/api/apps.js";
+
+/**
+ * Helper to execute an async test against the real GitHub auto-collection pipeline
+ * using an in-memory registry override and mocked GitHub Contents API responses.
+ */
+async function withMockedGitHubRepo(fn) {
+  const originalFetch = globalThis.fetch;
+  const testRepo = "vib-tools/calgrid-live-test";
+  const testEnv = {
+    __REGISTRY_OVERRIDE: [`https://github.com/${testRepo}`]
+  };
+  const testConfig = {
+    $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+    schemaVersion: 1,
+    slug: "calgrid",
+    name: "CalGrid",
+    tagline: "Minimalist desktop calendar widget and event scheduler",
+    category: "Productivity",
+    access: "Free",
+    icon: "https://dl.vib.tools/calgrid/icon.png",
+    latest: "v1.0.3",
+    installer: { type: "powershell", script: ".vibtools/apps/installer.ps1" },
+    docs: { features: ".vibtools/apps/features.md", changelog: ".vibtools/apps/changelog.md" },
+    versions: {
+      "v1.0.3": {
+        url: "https://dl.vib.tools/calgrid/v1.0.3/CalGrid-Setup-1.0.3.exe",
+        size: "42.8 MB",
+        sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        released_at: "2026-11-15",
+        channel: "stable"
+      },
+      "v1.0.3+build.9": {
+        url: "https://dl.vib.tools/calgrid/v1.0.3/CalGrid-Setup-1.0.3-build9.exe",
+        size: "42.9 MB",
+        released_at: "2026-11-16",
+        channel: "beta"
+      }
+    }
+  };
+  const testInstaller = [
+    "$ErrorActionPreference = 'Stop'",
+    'Write-Host "Installing $APP_NAME ($APP_VERSION)..."',
+    '$DownloadUrl = "https://get.vib.tools/dl/$APP_SLUG/$APP_VERSION"',
+    'Invoke-WebRequest -Uri $DownloadUrl -OutFile "$env:TEMP\\setup.exe"',
+    'Get-FileHash -Path "$env:TEMP\\setup.exe" -Algorithm SHA256'
+  ].join("\n");
+
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes(`${testRepo}/contents/.vibtools/apps/app.config.json`)) {
+      return new Response(JSON.stringify(testConfig), { status: 200 });
+    }
+    if (u.includes(`${testRepo}/contents/.vibtools/apps/installer.ps1`)) {
+      return new Response(testInstaller, { status: 200 });
+    }
+    if (u.includes(`${testRepo}/contents/.vibtools/apps/features.md`)) {
+      return new Response("# CalGrid Features\n\nFast keyboard-first calendar.", { status: 200 });
+    }
+    if (u.includes(`${testRepo}/contents/.vibtools/apps/changelog.md`)) {
+      return new Response("# Changelog\n\n## v1.0.3\n- Initial release", { status: 200 });
+    }
+    return new Response("Not Found", { status: 404 });
+  };
+
+  try {
+    return await fn(testEnv);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
 
 test("slug validation rejects traversal and accepts valid slugs", () => {
   assert.equal(isValidSlug("calgrid"), true);
@@ -25,32 +94,67 @@ test("slug validation rejects traversal and accepts valid slugs", () => {
   assert.equal(isValidSlug(""), false);
 });
 
-test("mock catalog engine returns schema-valid sample apps", () => {
-  const apps = getMockApps();
-  assert.ok(Array.isArray(apps));
-  assert.ok(apps.length >= 3);
-  const calgrid = findMockApp("calgrid");
-  assert.equal(calgrid?.name, "CalGrid");
-  assert.equal(calgrid?.latest, "v1.0.3");
+test("Pure Repo-Only invariant: mockData.js is deleted and registry.json starts as clean empty array", () => {
+  assert.equal(fs.existsSync(path.join(process.cwd(), "functions/_lib/mockData.js")), false);
+  const rawRegistry = JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), "registry.json"), "utf8")
+  );
+  assert.ok(Array.isArray(rawRegistry));
+  assert.deepEqual(rawRegistry, []);
 });
 
-test("GET /api/apps returns fallback catalog JSON", async () => {
-  const req = new Request("http://localhost:3000/api/apps");
-  const res = await handleEdgeRequest(req);
-  assert.equal(res.status, 200);
-  const data = await res.json();
-  assert.ok(Array.isArray(data.apps));
-  assert.ok(data.apps.length >= 3);
+test("Pure Repo-Only default: GET /api/apps returns empty live catalog with no-store and unregistered slugs return 404 everywhere", async () => {
+  for (const url of ["http://localhost:3000/api/apps", "https://apps.vib.tools/api/apps"]) {
+    const res = await handleEdgeRequest(new Request(url));
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("X-Catalog-Source"), "live");
+    assert.equal(res.headers.get("Cache-Control"), "no-store");
+    assert.equal(res.headers.get("X-Cache-Status"), "BYPASS");
+    const data = await res.json();
+    assert.deepEqual(data, { apps: [], count: 0 });
+  }
+
+  const missingDetail = await handleEdgeRequest(
+    new Request("http://localhost:3000/api/apps?slug=calgrid")
+  );
+  assert.equal(missingDetail.status, 404);
+
+  const missingCli = await handleEdgeRequest(
+    new Request("http://localhost:3000/calgrid?mode=get")
+  );
+  assert.equal(missingCli.status, 404);
+
+  const missingDl = await handleEdgeRequest(
+    new Request("http://localhost:3000/dl/calgrid?mode=get")
+  );
+  assert.equal(missingDl.status, 404);
 });
 
-test("GET /api/apps?slug=calgrid returns single app detail and docs", async () => {
-  const req = new Request("http://localhost:3000/api/apps?slug=calgrid");
-  const res = await handleEdgeRequest(req);
-  assert.equal(res.status, 200);
-  const data = await res.json();
-  assert.equal(data.app.slug, "calgrid");
-  assert.ok(data.docs.features.includes("CalGrid"));
-  assert.ok(data.docs.changelog.includes("v1.0.3"));
+test("Live Repo Auto-Collection: GET /api/apps and Mode B fetch config and docs from registered GitHub repo", async () => {
+  await withMockedGitHubRepo(async (testEnv) => {
+    const listRes = await handleEdgeRequest(
+      new Request("http://localhost:3000/api/apps"),
+      testEnv
+    );
+    assert.equal(listRes.status, 200);
+    assert.equal(listRes.headers.get("X-Catalog-Source"), "live");
+    const listData = await listRes.json();
+    assert.equal(listData.count, 1);
+    assert.equal(listData.apps[0].slug, "calgrid");
+    assert.equal(listData.apps[0].latest, "v1.0.3");
+
+    const detailRes = await handleEdgeRequest(
+      new Request("http://localhost:3000/api/apps?slug=calgrid"),
+      testEnv
+    );
+    assert.equal(detailRes.status, 200);
+    assert.equal(detailRes.headers.get("X-Catalog-Source"), "live");
+    assert.equal(detailRes.headers.get("X-Cache-Status"), "BYPASS");
+    const detailData = await detailRes.json();
+    assert.equal(detailData.app.slug, "calgrid");
+    assert.ok(detailData.docs.features.includes("CalGrid Features"));
+    assert.ok(detailData.docs.changelog.includes("v1.0.3"));
+  });
 });
 
 test("SPA routes on apps.vib.tools return index.html with 200 OK", async () => {
@@ -63,28 +167,44 @@ test("SPA routes on apps.vib.tools return index.html with 200 OK", async () => {
   assert.ok(html.includes("<div id=\"app\"></div>"));
 });
 
-test("CLI installer route on get.vib.tools returns PowerShell script", async () => {
-  const req = new Request("http://localhost:3000/calgrid/1.0.3?mode=get");
-  const res = await handleEdgeRequest(req);
-  assert.equal(res.status, 200);
-  const script = await res.text();
-  assert.ok(script.includes('$APP_SLUG = "calgrid"'));
-  assert.ok(script.includes('$APP_VERSION = "v1.0.3"'));
+test("CLI installer route on get.vib.tools streams repo PowerShell script with injected vars and semver + metadata", async () => {
+  await withMockedGitHubRepo(async (testEnv) => {
+    const req = new Request("http://localhost:3000/calgrid/1.0.3?mode=get");
+    const res = await handleEdgeRequest(req, testEnv);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("X-Catalog-Source"), "live");
+    const script = await res.text();
+    assert.ok(script.includes('$APP_NAME = "CalGrid"'));
+    assert.ok(script.includes('$APP_SLUG = "calgrid"'));
+    assert.ok(script.includes('$APP_VERSION = "v1.0.3"'));
+    assert.ok(script.includes("Invoke-WebRequest"));
+    assert.ok(script.includes("Get-FileHash"));
+
+    const buildMetaRes = await handleEdgeRequest(
+      new Request("http://localhost:3000/calgrid/1.0.3%2Bbuild.9?mode=get"),
+      testEnv
+    );
+    assert.equal(buildMetaRes.status, 200);
+    const buildMetaScript = await buildMetaRes.text();
+    assert.ok(buildMetaScript.includes('$APP_VERSION = "v1.0.3+build.9"'));
+  });
 });
 
-test("Direct download route on get.vib.tools returns 302 redirect to R2 binary", async () => {
-  const req = new Request("http://localhost:3000/dl/calgrid/1.0.3?mode=get");
-  const res = await handleEdgeRequest(req);
-  assert.equal(res.status, 302);
-  assert.equal(
-    res.headers.get("location"),
-    "https://dl.vib.tools/calgrid/v1.0.3/CalGrid-Setup-1.0.3.exe"
-  );
+test("Direct download route on get.vib.tools returns 302 redirect to R2 binary from live repo config", async () => {
+  await withMockedGitHubRepo(async (testEnv) => {
+    const req = new Request("http://localhost:3000/dl/calgrid/1.0.3?mode=get");
+    const res = await handleEdgeRequest(req, testEnv);
+    assert.equal(res.status, 302);
+    assert.equal(
+      res.headers.get("location"),
+      "https://dl.vib.tools/calgrid/v1.0.3/CalGrid-Setup-1.0.3.exe"
+    );
+  });
 });
 
 // --- Cycle 2 Regression Suite (BUG-01 through BUG-11, BUG-13, BUG-17) ---
 
-test("BUG-01: Live prod host disables mock fallback by default, never caches mock/empty payloads, and honors ENABLE_MOCK_FALLBACK", async () => {
+test("BUG-01: Live and local hosts never serve mock data and never cache empty payloads", async () => {
   const prodRes = await appsApiGet({
     request: new Request("https://apps.vib.tools/api/apps", {
       headers: { Host: "apps.vib.tools" }
@@ -95,40 +215,21 @@ test("BUG-01: Live prod host disables mock fallback by default, never caches moc
   assert.equal(prodRes.status, 200);
   assert.equal(prodRes.headers.get("X-Catalog-Source"), "live");
   assert.equal(prodRes.headers.get("Cache-Control"), "no-store");
+  assert.equal(prodRes.headers.get("X-Cache-Status"), "BYPASS");
   const prodBody = await prodRes.json();
   assert.deepEqual(prodBody.apps, []);
 
-  const disabledLocalRes = await appsApiGet({
-    request: new Request("http://localhost:3000/api/apps"),
-    env: { ENABLE_MOCK_FALLBACK: "false" },
-    waitUntil: () => {}
-  });
-  assert.equal(disabledLocalRes.status, 200);
-  assert.equal(disabledLocalRes.headers.get("X-Catalog-Source"), "live");
-  const disabledBody = await disabledLocalRes.json();
-  assert.deepEqual(disabledBody.apps, []);
-
-  const localMockRes = await appsApiGet({
+  const localRes = await appsApiGet({
     request: new Request("http://localhost:3000/api/apps"),
     env: {},
     waitUntil: () => {}
   });
-  assert.equal(localMockRes.status, 200);
-  assert.equal(localMockRes.headers.get("X-Catalog-Source"), "mock");
-  assert.equal(localMockRes.headers.get("Cache-Control"), "no-store");
-  assert.equal(localMockRes.headers.get("X-Cache-Status"), "BYPASS");
-});
-
-test("BUG-02: Demo PowerShell script defines $APP_NAME, $APP_SLUG, $APP_VERSION, Invoke-WebRequest, and SHA256 verification", async () => {
-  const req = new Request("http://localhost:3000/calgrid/1.0.3?mode=get");
-  const res = await handleEdgeRequest(req);
-  assert.equal(res.status, 200);
-  const script = await res.text();
-  assert.ok(script.includes('$APP_NAME = "CalGrid"'));
-  assert.ok(script.includes('$APP_SLUG = "calgrid"'));
-  assert.ok(script.includes('$APP_VERSION = "v1.0.3"'));
-  assert.ok(script.includes("Invoke-WebRequest"));
-  assert.ok(script.includes("Get-FileHash"));
+  assert.equal(localRes.status, 200);
+  assert.equal(localRes.headers.get("X-Catalog-Source"), "live");
+  assert.equal(localRes.headers.get("Cache-Control"), "no-store");
+  assert.equal(localRes.headers.get("X-Cache-Status"), "BYPASS");
+  const localBody = await localRes.json();
+  assert.deepEqual(localBody.apps, []);
 });
 
 test("BUG-03: Malformed percent-encoding returns 400 Bad Request without crashing on both domains", async () => {
@@ -167,19 +268,19 @@ test("BUG-05: get.vib.tools rejects invalid/traversal slugs with 400 and prototy
   );
   assert.equal(resBadSlugHtml.status, 400);
 
-  const resProtoCli = await handleEdgeRequest(new Request("http://localhost:3000/calgrid/toString?mode=get"));
-  assert.equal(resProtoCli.status, 404);
+  await withMockedGitHubRepo(async (testEnv) => {
+    const resProtoCli = await handleEdgeRequest(
+      new Request("http://localhost:3000/calgrid/toString?mode=get"),
+      testEnv
+    );
+    assert.equal(resProtoCli.status, 404);
 
-  const resProtoDl = await handleEdgeRequest(new Request("http://localhost:3000/dl/calgrid/constructor?mode=get"));
-  assert.equal(resProtoDl.status, 404);
-});
-
-test("BUG-06: Mode B (/api/apps?slug=calgrid) emits X-Cache-Status and X-Catalog-Source headers", async () => {
-  const res = await handleEdgeRequest(new Request("http://localhost:3000/api/apps?slug=calgrid"));
-  assert.equal(res.status, 200);
-  assert.equal(res.headers.get("X-Cache-Status"), "BYPASS");
-  assert.equal(res.headers.get("X-Catalog-Source"), "mock");
-  assert.equal(res.headers.get("Cache-Control"), "no-store");
+    const resProtoDl = await handleEdgeRequest(
+      new Request("http://localhost:3000/dl/calgrid/constructor?mode=get"),
+      testEnv
+    );
+    assert.equal(resProtoDl.status, 404);
+  });
 });
 
 test("BUG-07: SPA fallback emits single clean Content-Type: text/html; charset=utf-8 header", async () => {
@@ -191,21 +292,25 @@ test("BUG-07: SPA fallback emits single clean Content-Type: text/html; charset=u
 });
 
 test("BUG-08: Browser visiting get.vib.tools/<slug>/<version> redirects 302 to storefront while CLI & /dl/ remain intact", async () => {
-  const resBrowser = await handleEdgeRequest(
-    new Request("http://localhost:3000/calgrid/1.0.3?mode=get", {
-      headers: { Accept: "text/html,application/xhtml+xml" }
-    })
-  );
-  assert.equal(resBrowser.status, 302);
-  assert.equal(resBrowser.headers.get("location"), "https://apps.vib.tools/app/calgrid");
+  await withMockedGitHubRepo(async (testEnv) => {
+    const resBrowser = await handleEdgeRequest(
+      new Request("http://localhost:3000/calgrid/1.0.3?mode=get", {
+        headers: { Accept: "text/html,application/xhtml+xml" }
+      }),
+      testEnv
+    );
+    assert.equal(resBrowser.status, 302);
+    assert.equal(resBrowser.headers.get("location"), "https://apps.vib.tools/app/calgrid");
 
-  const resCli = await handleEdgeRequest(
-    new Request("http://localhost:3000/calgrid/1.0.3?mode=get", {
-      headers: { Accept: "*/*" }
-    })
-  );
-  assert.equal(resCli.status, 200);
-  assert.ok((await resCli.text()).includes('$APP_VERSION = "v1.0.3"'));
+    const resCli = await handleEdgeRequest(
+      new Request("http://localhost:3000/calgrid/1.0.3?mode=get", {
+        headers: { Accept: "*/*" }
+      }),
+      testEnv
+    );
+    assert.equal(resCli.status, 200);
+    assert.ok((await resCli.text()).includes('$APP_VERSION = "v1.0.3"'));
+  });
 });
 
 test("BUG-09: /api/apps is isolated from get.vib.tools (GET and OPTIONS return 404)", async () => {
@@ -338,7 +443,7 @@ test("Frozen JSON Schema and Vib Apps Engine spec endpoints serve with 200 OK an
   );
   assert.equal(guideRes.status, 200);
   assert.equal(guideRes.headers.get("Access-Control-Allow-Origin"), "*");
-  assert.ok((await guideRes.text()).includes("AI Agent Self-Verification Checklist"));
+  assert.ok((await guideRes.text()).includes("12-Point Self-Verification Checklist"));
 });
 
 test("parseRepoIdentifier and getRegistry normalize bare GitHub URLs, /tree/<branch>, shorthands, and objects", () => {
@@ -593,3 +698,261 @@ test("fetchAppInstaller resolves per-version repo path & trusted HTTPS overrides
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Forensic parity: validateAppConfig strict v1 rejects uppercase slug, prototype version keys, non-exact latest, and malformed optional fields", () => {
+  const baseV1 = {
+    $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+    schemaVersion: 1,
+    slug: "calgrid",
+    name: "CalGrid",
+    latest: "v1.0.3",
+    versions: {
+      "v1.0.3": {
+        url: "https://dl.vib.tools/calgrid/v1.0.3/CalGrid.exe"
+      }
+    }
+  };
+  assert.equal(validateAppConfig(baseV1).ok, true);
+
+  const invalidCases = [
+    // Uppercase slug rejected in strict v1
+    { ...baseV1, slug: "CalGrid" },
+    // Prototype-like version key rejected (must start with digit after optional v)
+    {
+      ...baseV1,
+      latest: "constructor",
+      versions: { constructor: { url: "https://dl.vib.tools/calgrid/c.exe" } }
+    },
+    // Non-exact latest key mismatch rejected in strict v1
+    { ...baseV1, latest: "1.0.3" },
+    // Malformed optional fields
+    { ...baseV1, platforms: "Windows" },
+    { ...baseV1, architectures: [""] },
+    { ...baseV1, screenshots: ["javascript:alert(1)"] },
+    { ...baseV1, links: { docs: "http://insecure.example.com" } },
+    { ...baseV1, requirements: [] },
+    { ...baseV1, icon: "http://dl.vib.tools/icon.png" }
+  ];
+
+  for (const invalid of invalidCases) {
+    const verdict = validateAppConfig(invalid);
+    assert.equal(verdict.ok, false, `Expected invalid v1 config to fail: ${JSON.stringify(invalid)}`);
+    assert.equal(verdict.status, 422);
+  }
+});
+
+test("Forensic parity: getRegistry deduplicates duplicate GitHub repo URLs and AI/SEO endpoints serve cleanly", async () => {
+  const deduped = getRegistry([
+    "https://github.com/vib-tools/calgrid",
+    "vib-tools/calgrid",
+    "https://github.com/VIB-TOOLS/CalGrid.git"
+  ]);
+  assert.equal(deduped.length, 1);
+
+  const rootLlms = await handleEdgeRequest(new Request("http://localhost:3000/llms.txt"));
+  assert.equal(rootLlms.status, 200);
+  assert.equal(rootLlms.headers.get("Access-Control-Allow-Origin"), "*");
+  assert.ok((await rootLlms.text()).includes("vibtools-app.schema.json"));
+
+  const aiGuide = await handleEdgeRequest(new Request("http://localhost:3000/vib-apps-engine/ai-guide.md"));
+  assert.equal(aiGuide.status, 200);
+  assert.equal(aiGuide.headers.get("Access-Control-Allow-Origin"), "*");
+  assert.ok((await aiGuide.text()).includes("Ready-to-Paste Prompt"));
+
+  const robots = await handleEdgeRequest(new Request("http://localhost:3000/robots.txt"));
+  assert.equal(robots.status, 200);
+  assert.ok((await robots.text()).includes("Sitemap: https://apps.vib.tools/sitemap.xml"));
+
+  const sitemap = await handleEdgeRequest(new Request("http://localhost:3000/sitemap.xml"));
+  assert.equal(sitemap.status, 200);
+  assert.equal(sitemap.headers.get("Content-Type"), "application/xml; charset=utf-8");
+  const xml = await sitemap.text();
+  assert.ok(xml.includes("https://apps.vib.tools/schemas/vibtools-app.schema.json"));
+  assert.ok(xml.includes("https://apps.vib.tools/vib-apps-engine/ai-guide.md"));
+
+  const indexHtml = fs.readFileSync(path.join(process.cwd(), "public/index.html"), "utf8");
+  assert.ok(indexHtml.includes('rel="canonical"'));
+  assert.ok(indexHtml.includes('href="/llms.txt"'));
+  assert.ok(indexHtml.includes('application/ld+json'));
+});
+
+test("Forensic Pass 2: validateAppConfig rejects impossible calendar dates, duplicate platforms/architectures, and installer/docs traversal or non-HTTPS schemes", () => {
+  const baseV1 = {
+    $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+    schemaVersion: 1,
+    slug: "calgrid",
+    name: "CalGrid",
+    latest: "v1.0.3",
+    versions: {
+      "v1.0.3": {
+        url: "https://dl.vib.tools/calgrid/v1.0.3/CalGrid.exe",
+        released_at: "2024-02-29"
+      }
+    }
+  };
+  // Valid leap year date passes
+  assert.equal(validateAppConfig(baseV1).ok, true);
+
+  const invalidPass2Cases = [
+    // Impossible calendar dates
+    {
+      ...baseV1,
+      versions: {
+        "v1.0.3": { url: "https://dl.vib.tools/calgrid/v1.0.3/CalGrid.exe", released_at: "2026-02-31" }
+      }
+    },
+    {
+      ...baseV1,
+      versions: {
+        "v1.0.3": { url: "https://dl.vib.tools/calgrid/v1.0.3/CalGrid.exe", released_at: "2025-02-29" }
+      }
+    },
+    // Duplicate items violating uniqueItems: true
+    { ...baseV1, platforms: ["Windows 10/11", "Windows 10/11"] },
+    { ...baseV1, architectures: ["x64", "x64"] },
+    // Traversal & non-HTTPS schemes on root installer
+    { ...baseV1, installer: "../secret.ps1" },
+    { ...baseV1, installer: "http://dl.vib.tools/calgrid/install.ps1" },
+    { ...baseV1, installer: { type: "powershell", script: "javascript:alert(1)" } },
+    // Traversal & non-HTTPS schemes on per-version installer
+    {
+      ...baseV1,
+      versions: {
+        "v1.0.3": {
+          url: "https://dl.vib.tools/calgrid/v1.0.3/CalGrid.exe",
+          installer: ".vibtools/apps/../../etc/passwd"
+        }
+      }
+    },
+    {
+      ...baseV1,
+      versions: {
+        "v1.0.3": {
+          url: "https://dl.vib.tools/calgrid/v1.0.3/CalGrid.exe",
+          installer: "http://dl.vib.tools/calgrid/v1.0.3/install.ps1"
+        }
+      }
+    },
+    // Traversal & URI schemes on docs paths
+    { ...baseV1, docs: { features: "../README.md" } },
+    { ...baseV1, docs: { changelog: "https://evil.example.com/changelog.md" } }
+  ];
+
+  for (const invalid of invalidPass2Cases) {
+    const verdict = validateAppConfig(invalid);
+    assert.equal(verdict.ok, false, `Expected Pass 2 invalid config to fail: ${JSON.stringify(invalid)}`);
+    assert.equal(verdict.status, 422);
+  }
+});
+
+test("Forensic Pass 2: developer portal docs/dev/08-vib-apps-engine-ai-guide.md exists and is synced in index and manifest", () => {
+  const aiDevGuide = fs.readFileSync(
+    path.join(process.cwd(), "docs/dev/08-vib-apps-engine-ai-guide.md"),
+    "utf8"
+  );
+  assert.ok(aiDevGuide.includes("order: 8"));
+  assert.ok(aiDevGuide.includes("draft: false"));
+  assert.ok(aiDevGuide.includes("https://apps.vib.tools/vib-apps-engine/llms.txt"));
+  assert.ok(aiDevGuide.includes("https://apps.vib.tools/schemas/vibtools-app.schema.json"));
+
+  const devIndex = fs.readFileSync(path.join(process.cwd(), "docs/dev/index.md"), "utf8");
+  assert.ok(devIndex.includes("./08-vib-apps-engine-ai-guide.md"));
+
+  const docsManifest = fs.readFileSync(path.join(process.cwd(), "docs/MANIFEST.md"), "utf8");
+  assert.ok(docsManifest.includes("dev/08-vib-apps-engine-ai-guide.md"));
+
+  const securityDoc = fs.readFileSync(
+    path.join(process.cwd(), "docs/dev/05-security-and-validation.md"),
+    "utf8"
+  );
+  assert.ok(securityDoc.includes("isValidIsoCalendarDate") || securityDoc.includes("2026-02-31"));
+  assert.ok(securityDoc.includes("isTrustedDownloadUrl"));
+});
+
+test("Forensic Pass 3: rejects malformed https:// URLs, supports multi-branch resolveAppBySlug, and serves /llms-full.txt with CORS *", async () => {
+  const baseV1 = {
+    $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+    schemaVersion: 1,
+    slug: "calgrid",
+    name: "CalGrid",
+    latest: "v1.0.3",
+    versions: {
+      "v1.0.3": { url: "https://dl.vib.tools/calgrid/v1.0.3/CalGrid.exe" }
+    }
+  };
+
+  // Malformed "https://" without hostname must fail 422
+  for (const broken of [
+    { ...baseV1, icon: "https://" },
+    { ...baseV1, links: { docs: "https://" } },
+    { ...baseV1, screenshots: ["https://"] },
+    { ...baseV1, versions: { "v1.0.3": { url: "https://" } } },
+    { ...baseV1, installer: "https://" }
+  ]) {
+    const verdict = validateAppConfig(broken);
+    assert.equal(verdict.ok, false, `Expected malformed https:// URL to fail: ${JSON.stringify(broken)}`);
+    assert.equal(verdict.status, 422);
+  }
+
+  // Multi-branch same-repo auto-discovery in resolveAppBySlug()
+  const entries = getRegistry([
+    "https://github.com/vib-tools/calgrid/tree/main",
+    "https://github.com/vib-tools/calgrid/tree/beta"
+  ]);
+  assert.equal(entries.length, 2);
+
+  const branchFetcher = async (entry) => {
+    if (entry.branch === "main") {
+      return {
+        ok: true,
+        config: {
+          schemaVersion: 1,
+          slug: "calgrid-legacy",
+          name: "CalGrid Legacy",
+          latest: "v1.0.0",
+          versions: { "v1.0.0": { url: "https://dl.vib.tools/calgrid/v1.0.0/c.exe" } }
+        }
+      };
+    }
+    return {
+      ok: true,
+      config: {
+        schemaVersion: 1,
+        slug: "calgrid",
+        name: "CalGrid Beta",
+        latest: "v2.0.0-beta.1",
+        versions: { "v2.0.0-beta.1": { url: "https://dl.vib.tools/calgrid/v2.0.0-beta.1/c.exe" } }
+      }
+    };
+  };
+
+  const resolvedBeta = await resolveAppBySlug("calgrid", {}, {}, { entries, configFetcher: branchFetcher });
+  assert.equal(resolvedBeta?.entry.branch, "beta");
+  assert.equal(resolvedBeta?.config.slug, "calgrid");
+
+  // Single-URL AI Master Bundle /llms-full.txt serves 200 OK with CORS *
+  const fullLlmsRes = await handleEdgeRequest(new Request("http://localhost:3000/llms-full.txt"));
+  assert.equal(fullLlmsRes.status, 200);
+  assert.equal(fullLlmsRes.headers.get("Access-Control-Allow-Origin"), "*");
+  const fullText = await fullLlmsRes.text();
+  assert.ok(fullText.includes("Step-by-Step Setup Matrix"));
+  assert.ok(fullText.includes("12-Point Self-Verification Checklist"));
+
+  // Frozen JSON Schema enforces traversal/scheme guard on docs.features & docs.changelog
+  const schemaJson = JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), "public/schemas/vibtools-app.schema.json"), "utf8")
+  );
+  assert.ok(schemaJson.properties.docs.properties.features.not?.pattern);
+  assert.ok(schemaJson.properties.docs.properties.changelog.not?.pattern);
+
+  // Interactive /schema and /vib-apps-engine SPA routes return 200 OK HTML shell
+  for (const routePath of ["/schema", "/vib-apps-engine"]) {
+    const spaRes = await handleEdgeRequest(
+      new Request(`http://localhost:3000${routePath}`, { headers: { Accept: "text/html" } })
+    );
+    assert.equal(spaRes.status, 200);
+    assert.equal(spaRes.headers.get("content-type"), "text/html; charset=utf-8");
+  }
+});
+
+

@@ -6,6 +6,7 @@ import { MainLayout } from "./components/layout/MainLayout.js";
 import { AppGrid } from "./components/sections/AppGrid.js";
 import { AppDetailView } from "./components/sections/AppDetailView.js";
 import { CliGuideSection } from "./components/sections/CliGuideSection.js";
+import { SchemaGuideSection } from "./components/sections/SchemaGuideSection.js";
 import { toast } from "./components/ui/Toast.js";
 
 /**
@@ -79,6 +80,8 @@ async function bootstrap() {
       document.title = `${catName} — Vib Apps`;
     } else if (route.view === "cli") {
       document.title = "CLI Guide — Vib Apps";
+    } else if (route.view === "schema") {
+      document.title = "Schema & AI Docs — Vib Apps";
     } else {
       document.title = "Vib Apps — Apps Catalog & Edge Installer";
     }
@@ -140,6 +143,13 @@ async function bootstrap() {
       case "cli": {
         const cliGuide = CliGuideSection();
         layout.viewRoot.appendChild(cliGuide);
+        break;
+      }
+
+      case "schema": {
+        const schemaGuide = SchemaGuideSection();
+        activeViewCleanup = typeof schemaGuide.cleanup === "function" ? schemaGuide.cleanup : null;
+        layout.viewRoot.appendChild(schemaGuide);
         break;
       }
 

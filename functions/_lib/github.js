@@ -45,10 +45,44 @@ const FROZEN_VERSION_KEYS = new Set([
 const ALLOWED_INSTALLER_TYPES = new Set(["powershell", "bash", "sh", "cmd"]);
 const ALLOWED_CHANNELS = new Set(["stable", "beta", "alpha"]);
 const ALLOWED_ACCESS = new Set(["Free", "Paid"]);
-const VERSION_KEY_RE = /^[vV]?[0-9A-Za-z][0-9A-Za-z._+-]{0,47}$/;
+const STRICT_LOWER_SLUG_RE = /^[a-z0-9][a-z0-9-_]{0,63}$/;
+const VERSION_KEY_RE = /^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$/;
 const SHA256_RE = /^[a-fA-F0-9]{64}$/;
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const GITHUB_SEGMENT_RE = /^[A-Za-z0-9._-]+$/;
+
+function isValidIsoCalendarDate(value) {
+  if (typeof value !== "string") return false;
+  const match = ISO_DATE_RE.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  return (
+    dt.getUTCFullYear() === year &&
+    dt.getUTCMonth() === month - 1 &&
+    dt.getUTCDate() === day
+  );
+}
+
+function hasPathTraversal(pathStr) {
+  let decoded = pathStr;
+  try {
+    decoded = decodeURIComponent(pathStr);
+  } catch (_) {}
+  return decoded.split(/[/\\]/).includes("..") || pathStr.includes("..");
+}
+
+function isValidHttpsUrl(value) {
+  if (typeof value !== "string" || !value.startsWith("https://")) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && Boolean(parsed.hostname);
+  } catch (_) {
+    return false;
+  }
+}
 
 /**
  * Validates a slug against safe alphanumeric & hyphen naming standards.
@@ -248,7 +282,17 @@ export function getRegistry(source = registry) {
       ? source.apps
       : [];
 
-  return rawList.map(normalizeRegistryEntry).filter(Boolean);
+  const seen = new Set();
+  const deduped = [];
+  for (const rawItem of rawList) {
+    const normalized = normalizeRegistryEntry(rawItem);
+    if (!normalized) continue;
+    const dedupeKey = `${normalized.repo.toLowerCase()}@${normalized.branch}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    deduped.push(normalized);
+  }
+  return deduped;
 }
 
 /**
@@ -337,8 +381,12 @@ export async function fetchRepoFile(repo, branch, filePath, env, ctx, { ttl = 30
     }
   }
 
-  // 2. Fetch from GitHub API
-  const apiUrl = `https://api.github.com/repos/${repo}/contents/${cleanPath}?ref=${encodeURIComponent(targetBranch)}`;
+  // 2. Fetch from GitHub API (segment-encode path while preserving slashes)
+  const encodedCleanPath = cleanPath
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/");
+  const apiUrl = `https://api.github.com/repos/${repo}/contents/${encodedCleanPath}?ref=${encodeURIComponent(targetBranch)}`;
   const headers = {
     "Accept": "application/vnd.github.raw+json",
     "User-Agent": "vib-apps-hub"
@@ -484,14 +532,36 @@ export async function fetchTrustedRemoteScript(remoteUrl, env, ctx, { ttl = 300 
   return { ok: true, text, status: 200 };
 }
 
+function validateInstallerTargetString(target, label, isStrictV1) {
+  const trimmed = target.trim();
+  if (!trimmed) {
+    return { ok: false, status: 422, error: `${label} must be a non-empty string` };
+  }
+  if (isStrictV1) {
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+      if (!isValidHttpsUrl(trimmed)) {
+        return {
+          ok: false,
+          status: 422,
+          error: `${label} remote URL must be a valid https:// URL`
+        };
+      }
+    } else if (hasPathTraversal(trimmed)) {
+      return {
+        ok: false,
+        status: 422,
+        error: `${label} path must not contain directory traversal ('..')`
+      };
+    }
+  }
+  return { ok: true };
+}
+
 function validateInstallerSpec(spec, label, isStrictV1) {
   if (spec === undefined) return { ok: true };
 
   if (typeof spec === "string") {
-    if (!spec.trim()) {
-      return { ok: false, status: 422, error: `${label} must be a non-empty string` };
-    }
-    return { ok: true };
+    return validateInstallerTargetString(spec, label, isStrictV1);
   }
 
   if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
@@ -506,9 +576,12 @@ function validateInstallerSpec(spec, label, isStrictV1) {
     }
   }
 
-  if (typeof spec.script !== "string" || !spec.script.trim()) {
+  if (typeof spec.script !== "string") {
     return { ok: false, status: 422, error: `${label}.script must be a non-empty string` };
   }
+
+  const scriptCheck = validateInstallerTargetString(spec.script, `${label}.script`, isStrictV1);
+  if (!scriptCheck.ok) return scriptCheck;
 
   if (spec.type !== undefined) {
     if (typeof spec.type !== "string" || (isStrictV1 && !ALLOWED_INSTALLER_TYPES.has(spec.type))) {
@@ -571,33 +644,105 @@ export function validateAppConfig(config) {
     typeof config.slug !== "string" ||
     !config.slug.trim() ||
     !isValidSlug(config.slug) ||
+    (isStrictV1 && !STRICT_LOWER_SLUG_RE.test(config.slug)) ||
     typeof config.name !== "string" ||
     !config.name.trim() ||
+    (isStrictV1 && config.name.length > 80) ||
     typeof config.latest !== "string" ||
-    !config.latest.trim()
+    !config.latest.trim() ||
+    (isStrictV1 && !VERSION_KEY_RE.test(config.latest))
   ) {
     return {
       ok: false,
       status: 422,
-      error: "Fields slug, name, and latest in app.config.json must be valid non-empty strings"
+      error: "Fields slug (lowercase in v1), name, and latest in app.config.json must be valid non-empty strings"
     };
   }
 
-  if (config.access !== undefined && isStrictV1 && !ALLOWED_ACCESS.has(config.access)) {
-    return {
-      ok: false,
-      status: 422,
-      error: "Field access in app.config.json must be 'Free' or 'Paid'"
-    };
-  }
-
-  if (config.icon !== undefined && isStrictV1) {
-    if (typeof config.icon !== "string" || !config.icon.startsWith("https://")) {
-      return {
-        ok: false,
-        status: 422,
-        error: "Field icon in app.config.json must be an https:// URL"
-      };
+  if (isStrictV1) {
+    if (config.$schema !== undefined && !isValidHttpsUrl(config.$schema)) {
+      return { ok: false, status: 422, error: "Field $schema must be a valid https:// URI string" };
+    }
+    if (config.tagline !== undefined && (typeof config.tagline !== "string" || !config.tagline.trim() || config.tagline.length > 160)) {
+      return { ok: false, status: 422, error: "Field tagline must be a non-empty string (max 160 chars)" };
+    }
+    if (config.category !== undefined && (typeof config.category !== "string" || !config.category.trim() || config.category.length > 48)) {
+      return { ok: false, status: 422, error: "Field category must be a non-empty string (max 48 chars)" };
+    }
+    if (config.access !== undefined && !ALLOWED_ACCESS.has(config.access)) {
+      return { ok: false, status: 422, error: "Field access in app.config.json must be 'Free' or 'Paid'" };
+    }
+    if (config.icon !== undefined && !isValidHttpsUrl(config.icon)) {
+      return { ok: false, status: 422, error: "Field icon in app.config.json must be a valid https:// URL" };
+    }
+    if (config.platforms !== undefined) {
+      if (
+        !Array.isArray(config.platforms) ||
+        config.platforms.some((p) => typeof p !== "string" || !p.trim() || p.length > 48) ||
+        new Set(config.platforms).size !== config.platforms.length
+      ) {
+        return { ok: false, status: 422, error: "Field platforms must be an array of unique non-empty strings" };
+      }
+    }
+    if (config.architectures !== undefined) {
+      if (
+        !Array.isArray(config.architectures) ||
+        config.architectures.some((a) => typeof a !== "string" || !a.trim() || a.length > 24) ||
+        new Set(config.architectures).size !== config.architectures.length
+      ) {
+        return { ok: false, status: 422, error: "Field architectures must be an array of unique non-empty strings" };
+      }
+    }
+    if (config.requirements !== undefined) {
+      const isValidArr =
+        Array.isArray(config.requirements) &&
+        config.requirements.length > 0 &&
+        config.requirements.every((r) => typeof r === "string" && r.trim().length > 0);
+      const isValidObj =
+        !Array.isArray(config.requirements) &&
+        config.requirements &&
+        typeof config.requirements === "object" &&
+        Object.keys(config.requirements).length > 0 &&
+        Object.values(config.requirements).every((v) => typeof v === "string" && v.trim().length > 0);
+      if (!isValidArr && !isValidObj) {
+        return { ok: false, status: 422, error: "Field requirements must be a non-empty string array or string map" };
+      }
+    }
+    if (config.screenshots !== undefined) {
+      if (!Array.isArray(config.screenshots)) {
+        return { ok: false, status: 422, error: "Field screenshots must be an array" };
+      }
+      for (const item of config.screenshots) {
+        if (typeof item === "string") {
+          if (!isValidHttpsUrl(item)) {
+            return { ok: false, status: 422, error: "Each screenshot URL must be a valid https:// URL" };
+          }
+        } else if (item && typeof item === "object" && !Array.isArray(item)) {
+          const itemKeys = Object.keys(item);
+          if (itemKeys.some((k) => k !== "url" && k !== "alt")) {
+            return { ok: false, status: 422, error: "Screenshot objects only allow 'url' and 'alt' properties" };
+          }
+          if (!isValidHttpsUrl(item.url)) {
+            return { ok: false, status: 422, error: "Screenshot object url must be a valid https:// URL" };
+          }
+          if (item.alt !== undefined && (typeof item.alt !== "string" || item.alt.length > 160)) {
+            return { ok: false, status: 422, error: "Screenshot object alt must be a string (max 160 chars)" };
+          }
+        } else {
+          return { ok: false, status: 422, error: "Each screenshot entry must be an https:// string or { url, alt? } object" };
+        }
+      }
+    }
+    if (config.links !== undefined) {
+      if (
+        !config.links ||
+        typeof config.links !== "object" ||
+        Array.isArray(config.links) ||
+        Object.keys(config.links).length === 0 ||
+        Object.values(config.links).some((u) => !isValidHttpsUrl(u))
+      ) {
+        return { ok: false, status: 422, error: "Field links must be a non-empty object mapping names to valid https:// URLs" };
+      }
     }
   }
 
@@ -622,6 +767,14 @@ export function validateAppConfig(config) {
             ok: false,
             status: 422,
             error: `docs.${docKey} must be a non-empty string`
+          };
+        }
+        const docVal = config.docs[docKey].trim();
+        if (hasPathTraversal(docVal) || /^[a-z][a-z0-9+.-]*:/i.test(docVal)) {
+          return {
+            ok: false,
+            status: 422,
+            error: `docs.${docKey} must be a safe repo-relative Markdown path without traversal ('..') or URI schemes`
           };
         }
       }
@@ -668,11 +821,19 @@ export function validateAppConfig(config) {
         };
       }
 
-      if (typeof verObj.url !== "string" || !verObj.url.startsWith("https://")) {
+      if (!isValidHttpsUrl(verObj.url)) {
         return {
           ok: false,
           status: 422,
-          error: `versions.${verKey}.url is required and must start with https://`
+          error: `versions.${verKey}.url is required and must be a valid https:// URL`
+        };
+      }
+
+      if (verObj.size !== undefined && (typeof verObj.size !== "string" || !verObj.size.trim() || verObj.size.length > 32)) {
+        return {
+          ok: false,
+          status: 422,
+          error: `versions.${verKey}.size must be a non-empty string (max 32 chars)`
         };
       }
 
@@ -684,11 +845,11 @@ export function validateAppConfig(config) {
         };
       }
 
-      if (verObj.released_at !== undefined && (typeof verObj.released_at !== "string" || !ISO_DATE_RE.test(verObj.released_at))) {
+      if (verObj.released_at !== undefined && !isValidIsoCalendarDate(verObj.released_at)) {
         return {
           ok: false,
           status: 422,
-          error: `versions.${verKey}.released_at must follow strict YYYY-MM-DD format`
+          error: `versions.${verKey}.released_at must be a valid calendar date in strict YYYY-MM-DD format`
         };
       }
     }
@@ -717,16 +878,26 @@ export function validateAppConfig(config) {
     if (!verInstCheck.ok) return verInstCheck;
   }
 
-  const latestNorm = config.latest.trim().toLowerCase().replace(/^v/, "");
-  const hasLatestEntry = Object.keys(config.versions).some(
-    (k) => k.toLowerCase().replace(/^v/, "") === latestNorm
-  );
-  if (!hasLatestEntry) {
-    return {
-      ok: false,
-      status: 422,
-      error: `Latest version '${config.latest}' not found in app.config.json versions map`
-    };
+  if (isStrictV1) {
+    if (!Object.hasOwn(config.versions, config.latest)) {
+      return {
+        ok: false,
+        status: 422,
+        error: `Latest version '${config.latest}' must match an exact key in versions`
+      };
+    }
+  } else {
+    const latestNorm = config.latest.trim().toLowerCase().replace(/^v/, "");
+    const hasLatestEntry = Object.keys(config.versions).some(
+      (k) => k.toLowerCase().replace(/^v/, "") === latestNorm
+    );
+    if (!hasLatestEntry) {
+      return {
+        ok: false,
+        status: 422,
+        error: `Latest version '${config.latest}' not found in app.config.json versions map`
+      };
+    }
   }
 
   return { ok: true };
@@ -813,15 +984,20 @@ export async function resolveAppBySlug(slug, env, ctx, options = {}) {
   if (!isValidSlug(slug)) return null;
 
   const clean = slug.trim().toLowerCase();
-  const entries = Array.isArray(options.entries) ? options.entries : getRegistry();
+  const entries = Array.isArray(options.entries)
+    ? options.entries
+    : Array.isArray(env?.__REGISTRY_OVERRIDE)
+      ? getRegistry(env.__REGISTRY_OVERRIDE)
+      : getRegistry();
   const loadConfig = typeof options.configFetcher === "function" ? options.configFetcher : fetchAppConfig;
 
   const triedRepos = new Set();
+  const entryKey = (item) => `${String(item.repo || "").toLowerCase()}@${item.branch || "main"}`;
 
   // 1. Fast path: explicit slug match or matching repo name
   const directCandidate = findAppEntry(clean, entries);
   if (directCandidate) {
-    triedRepos.add(directCandidate.repo);
+    triedRepos.add(entryKey(directCandidate));
     const cfgRes = await loadConfig(directCandidate, env, ctx);
     if (cfgRes?.ok && cfgRes.config) {
       if (
@@ -835,7 +1011,7 @@ export async function resolveAppBySlug(slug, env, ctx, options = {}) {
 
   // 2. Auto-discovery scan for URL-only registry entries whose repo name differs from app slug
   const remainingCandidates = entries.filter(
-    (item) => !triedRepos.has(item.repo) && (!item.slug || item.slug.toLowerCase() === clean)
+    (item) => !triedRepos.has(entryKey(item)) && (!item.slug || item.slug.toLowerCase() === clean)
   );
 
   if (remainingCandidates.length === 0) {

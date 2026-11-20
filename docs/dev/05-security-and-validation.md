@@ -1,55 +1,64 @@
 ---
 title: "Security, Validation & Audited Findings"
-description: "Security architecture, input validation rules, XSS controls, and verified implementation limitations discovered during forensic audit."
+description: "Verified security controls, Frozen Schema v1 validation invariants, trusted host allowlists, XSS defenses, and audit status across vib-apps-hub."
 order: 5
 draft: false
 ---
 
 # Security, Validation & Audited Findings
 
-This document catalogs every implemented security control alongside verified limitations and implementation findings observed directly in source code.
+This document catalogs every live security control, strict schema validation rule, and resolved audit finding verified directly against the current codebase.
 
 ## 1. Implemented Security Controls
 
 | Control Area | Implementation | Source Location |
 | :--- | :--- | :--- |
-| **Server-Side Secret Isolation** | `GITHUB_TOKEN` is read exclusively from `env.GITHUB_TOKEN` inside Pages Functions and sent as `Authorization: Bearer <token>` to `api.github.com`. Never serialized to clients, responses, or `public/`. | `functions/_lib/github.js:119–121` |
-| **Slug Validation** | Strict regex `/^[a-z0-9][a-z0-9-_]{0,63}$/i` rejects empty strings, path separators, special characters, and oversized slugs. | `functions/_lib/github.js:10–15`, `functions/api/apps.js:41` |
-| **Directory Traversal Protection** | `fetchRepoFile()` URI-decodes paths and rejects any path containing `..` segments with status `400`. `serveStaticAsset()` normalizes paths and enforces `fullPath.startsWith(PUBLIC_DIR)` (`403 Forbidden`). | `functions/_lib/github.js:73–81`, `server.js:81–87` |
-| **PowerShell Variable Sanitization** | Before interpolating `$APP_SLUG` and `$APP_VERSION` into streamed `.ps1` scripts, both values strip all characters matching `/[^a-zA-Z0-9._-]/g`. | `functions/[[path]].js:289–292` |
-| **Download Scheme Verification** | `/dl/*` validates `typeof downloadUrl === "string" && downloadUrl.startsWith("https://")` before issuing a `302` redirect. | `functions/[[path]].js:214` |
-| **XSS Prevention (Markdown & Modal)** | `AppDetailView.js` passes `marked.parse(rawMd)` through `DOMPurify.sanitize()`; if CDNs are unavailable offline, renders raw text inside `<pre>` using `.textContent`. `Modal.js` also sanitizes string `content`/`footer` through `DOMPurify.sanitize()`. | `public/components/sections/AppDetailView.js:54–62`, `public/components/ui/Modal.js:89–110` |
-| **Safe External Links & Tabnabbing Prevention** | External `target="_blank"` anchors set `rel="noopener noreferrer"` automatically in `Button.js`, `Sidebar.js`, `Footer.js`, and `AppDetailView.js`. `AppDetailView.js` validates `app.links` values against `/^https?:\/\//i`. | `public/components/ui/Button.js:46–50`, `public/components/sections/AppDetailView.js:758` |
-| **No Client Auth / No Cookies** | Zero user authentication, session cookies, or tracking scripts. Browser storage is limited to `localStorage.getItem("vib_theme")`. | `public/lib/theme.js:7–46` |
+| **Server-Side Secret Isolation** | `GITHUB_TOKEN` is read exclusively from `env.GITHUB_TOKEN` inside Pages Functions and sent as `Authorization: Bearer <token>` to `api.github.com`. Never serialized to clients, JSON responses, logs, or `public/`. | `functions/_lib/github.js` (`fetchRepoFile`) |
+| **Strict Slug & Repo Identifier Validation** | `isValidSlug()` enforces `/^[a-z0-9][a-z0-9-_]{0,63}$/i` on API/edge inputs. Frozen v1 configs enforce strictly lowercase `^[a-z0-9][a-z0-9-_]{0,63}$`. `parseRepoIdentifier()` accepts only `github.com` / `www.github.com` URLs or `owner/repo` shorthands with safe segment characters (`^[A-Za-z0-9._-]+$`) and rejects `.` / `..`. | `functions/_lib/github.js` (`isValidSlug`, `parseRepoIdentifier`) |
+| **Directory Traversal & Percent-Encoding Protection** | `functions/[[path]].js` catches malformed percent-encoding (`URIError`) and returns `400 Bad Request`. `fetchRepoFile()` and `hasPathTraversal()` decode paths and reject any `..` segment with `400`/`422`; every path segment is individually `encodeURIComponent`-encoded before querying GitHub. `server.js` enforces `fullPath.startsWith(PUBLIC_DIR)` (`403 Forbidden`). | `functions/_lib/github.js`, `functions/[[path]].js`, `server.js` |
+| **Trusted Host Allowlists (Open Redirect & SSRF Guard)** | `isTrustedDownloadUrl()` restricts `/dl/` 302 redirects to HTTPS URLs without credentials on `dl.vib.tools`, `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com`, or `env.ALLOWED_DOWNLOAD_HOSTS` (`403` otherwise). `isTrustedInstallerUrl()` applies the same allowlist plus `raw.githubusercontent.com` for remote installer scripts (`403` otherwise). | `functions/_lib/github.js`, `functions/[[path]].js` |
+| **PowerShell Variable Sanitization** | Before prepending `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` to streamed installer scripts, `$APP_SLUG` and `$APP_VERSION` strip `/[^a-zA-Z0-9._-]/g`, and `$APP_NAME` strips `/[^a-zA-Z0-9 ._-]/g`. | `functions/[[path]].js` (`onRequestGet`) |
+| **Prototype-Chain Version Key Guard** | `resolveVersion()` uses `Object.hasOwn(versions, ...)` exclusively and Frozen v1 requires version keys to match `^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$` — preventing `constructor`, `toString`, or `__proto__` collisions. | `functions/_lib/github.js`, `functions/[[path]].js` |
+| **API Domain Isolation & Anti-Cache-Poisoning** | `/api/apps` returns `404` on `get.vib.tools`. Pure Repo-Only Mode serves strictly live GitHub repositories (zero mock fallback), and `caches.default` never caches empty catalogs (`Cache-Control: no-store`, `X-Cache-Status: BYPASS`, `X-Catalog-Source: live`). | `functions/api/apps.js`, `functions/[[path]].js` |
+| **Catalog & Registry Deduplication** | `getRegistry()` deduplicates identical `repo@branch` entries (regardless of URL/shorthand form), and `GET /api/apps` deduplicates identical normalized `slug` values across different repositories (first valid entry wins). | `functions/_lib/github.js`, `functions/api/apps.js` |
+| **XSS Prevention (Markdown, Modal & Links)** | `AppDetailView.js` passes `marked.parse(rawMd)` through `DOMPurify.sanitize()` (with plain `.textContent` `<pre>` offline fallback). `Modal.js` sanitizes string `content`/`footer` with `DOMPurify.sanitize()`. External links enforce `rel="noopener noreferrer"` and `^https?://`; screenshots enforce `^https://`. | `public/components/sections/AppDetailView.js`, `public/components/ui/Modal.js`, `public/components/ui/Button.js` |
+| **No Client Auth / No Tracking Cookies** | Zero authentication tokens, session cookies, or analytics scripts. Browser storage is strictly limited to `localStorage.getItem("vib_theme")`. | `public/lib/theme.js` |
 
-## 2. Verified Implementation Findings & Limitations
+## 2. Frozen Schema v1 Validation Invariants (`validateAppConfig()`)
 
-The following findings were identified directly in source code during forensic audit and are documented transparently for maintainers:
+When a repository declares `"schemaVersion": 1` in `.vibtools/apps/app.config.json`, `validateAppConfig()` in `functions/_lib/github.js` enforces 100% parity with `public/schemas/vibtools-app.schema.json` (returning HTTP `422` on any violation):
 
-### Finding 1: Mock Installer Scripts Reference Uninjected `$APP_NAME`
-- **Where:** `functions/_lib/mockData.js` (lines `42`, `49`, `51`, `108`, `115`, `116`, `163`, `170`, `171`) vs `functions/[[path]].js` (line `292`).
-- **Observed Behavior:** `functions/[[path]].js` injects only `$APP_SLUG` and `$APP_VERSION`. The fallback sample installer scripts in `mockData.js` print `$APP_NAME`, which evaluates to an empty string in PowerShell.
-- **Guidance for App Authors:** Never rely on `$APP_NAME` or `$DOWNLOAD_URL` in `.vibtools/installer.ps1`; use only `$APP_SLUG` and `$APP_VERSION` (or define your own `$AppName` literal inside the script).
+1. **Closed Schema (`additionalProperties: false`):** Any unrecognized key on the root object or inside `versions.<key>` is rejected.
+2. **Required Root Fields:** `slug` (lowercase `^[a-z0-9][a-z0-9-_]{0,63}$`), `name` (1–80 chars), `latest` (must match an **exact** own key inside `versions`), and non-empty `versions` map.
+3. **Version Key & Release Field Checks:**
+   - Every version key matches `^[vV]?[0-9][0-9A-Za-z._+-]{0,47}$`.
+   - `url` is mandatory and must start with `https://`.
+   - `released_at` (optional) must be a real ISO calendar date `YYYY-MM-DD` (impossible dates like `"2026-02-31"` are rejected; leap dates like `"2024-02-29"` are accepted).
+   - `sha256` (optional) must match `^[a-fA-F0-9]{64}$`.
+   - `size` (optional) must be a 1–32 char string; `channel` must be `"stable" | "beta" | "alpha"`; `deprecated` must be boolean.
+4. **Installer & Docs Path Safety:**
+   - Root `installer` and per-version `versions.<k>.installer` reject `..` traversal segments and reject any non-`https://` URI scheme (`http://`, `javascript:`, `ftp:`, etc.). Allowed `installer.type` values: `"powershell"`, `"bash"`, `"sh"`, `"cmd"`.
+   - `docs.features` and `docs.changelog` must be safe repo-relative paths without `..` traversal or URI schemes.
+5. **Optional Metadata Parity:**
+   - `platforms` and `architectures` must be arrays of non-empty **unique** strings (`uniqueItems: true`).
+   - `requirements` must be a non-empty string array (`minItems: 1`) or non-empty string-valued object.
+   - `icon`, `screenshots`, and `links` values must start with `https://`.
 
-### Finding 2: Conditional `platforms` and `architectures` Selectors Are Informational Only
-- **Where:** `public/components/sections/AppDetailView.js:315–358`.
-- **Observed Behavior:** If an app manifest includes `platforms` or `architectures` arrays, the UI renders **Operating System** and **Architecture** `<select>` controls, but neither attaches a `change` listener and neither modifies `dlLink.href` or the CLI command (the schema maps each version key to a single `url`).
+## 3. Historical Audit Remediation Record
 
-### Finding 3: `/dl/` Redirect Checks HTTPS Scheme Without Host Allowlist
-- **Where:** `functions/[[path]].js:214`.
-- **Observed Behavior:** Redirect targets are checked with `downloadUrl.startsWith("https://")` rather than restricted to a fixed host allowlist (such as `dl.vib.tools`). Because download URLs originate strictly from repositories listed in `registry.json`, repository maintainers must ensure `registry.json` only registers trusted GitHub repositories.
+All five legacy findings from the initial pre-hardening audit have been fully resolved and locked under automated regression tests in `server.test.js`:
 
-### Finding 4: `npm test` Only Runs `server.test.js`
-- **Where:** `package.json:11`.
-- **Observed Behavior:** `"test": "node --test server.test.js"` executes 7 server/edge tests and omits the 5 frontend helper unit tests in `public/lib/appMeta.test.js`. Run `node --test server.test.js public/lib/appMeta.test.js` to execute all 12 tests.
-
-### Finding 5: Implemented-but-Unused Modules & Placeholder Registry
-- `public/components/ui/Modal.js` is fully implemented and exported from `public/components/ui/index.js`, but not currently invoked by any active page.
-- `public/styles.css` and `public/vib.tools.Branding/site.webmanifest` exist on disk but are not loaded by `public/index.html`.
-- `registry.json` currently contains only a placeholder entry (`example-app` → `vib-tools/example-app`), causing `/api/apps` to serve the 3 fallback apps from `functions/_lib/mockData.js` until real repositories are registered.
+| Former Finding | Resolution Verified in Code |
+| :--- | :--- |
+| Uninjected `$APP_NAME` in installer scripts | **Resolved:** `functions/[[path]].js` injects sanitized `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` before streaming every script. |
+| No-op OS / Architecture `<select>` controls | **Resolved:** Replaced with clean read-only specification rows (`Platforms`, `Architectures`) in `AppDetailView.js`. |
+| `/dl/` lacked trusted host allowlist | **Resolved:** Enforced `isTrustedDownloadUrl()` (`403` on untrusted hosts, HTTP, or credentialed URLs) and `isTrustedInstallerUrl()` for remote installer scripts. |
+| `npm test` omitted `appMeta.test.js` | **Resolved:** `package.json` runs `node --test server.test.js public/lib/appMeta.test.js` in a single command. |
+| Dead files in `public/` (`styles.css`, `site.webmanifest`, `assets/aistudio`) | **Resolved:** Unused non-runtime files removed and verified by automated regression assertions; `Modal.js` retained as an active UI primitive. |
 
 ## Related Guides
 
 - [App Onboarding & `.vibtools/` Schema](./03-app-onboarding.md)
 - [Store API & Edge Routing Reference](./04-api-and-edge-routing.md)
 - [Testing & Contributing](./07-testing-and-contributing.md)
+- [Vib Apps Engine AI Guide & Playbook](./08-vib-apps-engine-ai-guide.md)

@@ -1,6 +1,6 @@
 ---
 title: "Testing & Contributing"
-description: "Run all automated Node.js tests and syntax checks, follow zero-build UI and security guardrails, and keep documentation synchronized."
+description: "Run the full automated Node.js test suite and syntax checks, follow zero-build UI and security guardrails, and keep documentation synchronized."
 order: 7
 draft: false
 ---
@@ -19,22 +19,21 @@ npm run build
 # node --check server.js && node --check public/app.js && node --check functions/api/apps.js && node --check "functions/[[path]].js"
 ```
 
-### Full Automated Test Suite (All 12 Tests)
+### Full Automated Test Suite
 
-Run both test files together:
+Run both backend/edge and frontend helper suites with a single command:
 
 ```bash
-node --test server.test.js public/lib/appMeta.test.js
+npm test
+# Runs: node --test server.test.js public/lib/appMeta.test.js
 ```
-
-> **Note:** `npm test` executes `node --test server.test.js` (7 tests only). Always include `public/lib/appMeta.test.js` to verify all 12 tests.
 
 ### Test Coverage Breakdown
 
-| Test File | Tests | Verified Behaviors |
-| :--- | :---: | :--- |
-| `server.test.js` | 7 | `isValidSlug()` traversal rejection, `mockData.js` catalog integrity, `GET /api/apps` Mode A fallback JSON, `GET /api/apps?slug=calgrid` Mode B detail + docs, SPA `/app/calgrid` 200 OK HTML fallback, `get.vib.tools` PowerShell `$APP_SLUG`/`$APP_VERSION` injection + version normalization, and `/dl/` 302 redirect. |
-| `public/lib/appMeta.test.js` | 5 | `getAppMonogram()`, `getPackageFormat()`, `formatReleaseDate()`, `formatVersionLabel()` / `buildInstallCommand()` / `buildDownloadUrl()`, and `filterApps()` / `computeCategoryCounts()`. |
+| Test File | Verified Behaviors |
+| :--- | :--- |
+| `server.test.js` | Slug validation, mock catalog engine, Mode A & Mode B `/api/apps` (live/mock isolation, caching, slug deduplication), SPA routing & dot-containing routes, `get.vib.tools` PowerShell injection (`$APP_SLUG`, `$APP_VERSION`, `$APP_NAME`), trusted host allowlists (`isTrustedDownloadUrl`, `isTrustedInstallerUrl`), Frozen v1 `validateAppConfig()` parity (calendar dates, `uniqueItems`, traversal/scheme blocks, prototype keys, `additionalProperties: false`), URL-only `registry.json` auto-discovery (`parseRepoIdentifier`, `getRegistry`, `resolveAppBySlug`), per-version installer inheritance/overrides, `public/sw.js` precache integrity, and all public AI/SEO endpoints (`/llms.txt`, `/schemas/vibtools-app.schema.json`, `/vib-apps-engine/*`, `/robots.txt`, `/sitemap.xml`). |
+| `public/lib/appMeta.test.js` | `getAppMonogram()`, `getPackageFormat()`, `formatReleaseDate()`, `formatVersionLabel()`, `buildInstallCommand()`, `buildDownloadUrl()`, `filterApps()`, `computeCategoryCounts()`, and edge-case formatting/sorting helpers. |
 
 ## 2. Repository Guardrails for Contributors
 
@@ -47,12 +46,13 @@ Contributions must adhere strictly to `AGENTS.md` and `project/DESIGN_SYSTEM.md`
 5. **Security Rules:**
    - Never expose `GITHUB_TOKEN` outside `functions/`.
    - Sanitize all rendered Markdown through `DOMPurify.sanitize(marked.parse(...))`.
-   - Validate slugs and paths against traversal before querying GitHub or reading local files.
-6. **Service Worker Cache Versioning:** When adding or renaming files under `public/`, update `STATIC_ASSETS` and bump `CACHE_NAME` in `public/sw.js` (currently `vib-apps-hub-v2`).
+   - Validate slugs, version keys, paths, and redirect/installer hosts before querying GitHub or redirecting.
+6. **Service Worker Cache Versioning:** When adding or renaming files under `public/`, update `STATIC_ASSETS` and bump `CACHE_NAME` in `public/sw.js` (currently `vib-apps-hub-v3`).
 
 ## 3. Documentation Maintenance Rules
 
 - End-user docs live in `docs/users/` (`docs.vib.tools`) and developer docs live in `docs/dev/` (`developer.vibtools.io`), routed via `.vibtools/docs.config.json`.
+- Public AI-readable & SEO specifications live in `public/llms.txt`, `public/schemas/vibtools-app.schema.json`, and `public/vib-apps-engine/`. Keep them synchronized with `docs/dev/` whenever schema or routing behavior changes.
 - Keep YAML frontmatter valid (`title`, `description`, `order`, unquoted boolean `draft: false`) and ensure relative links inside `docs/users/` and `docs/dev/` stay strictly within their respective target `docsPath`.
 - Update `docs/MANIFEST.md` whenever files inside `docs/` are added, renamed, or removed.
 
@@ -61,3 +61,4 @@ Contributions must adhere strictly to `AGENTS.md` and `project/DESIGN_SYSTEM.md`
 - [Codebase Structure & Module Inventory](./02-codebase-structure.md)
 - [Security, Validation & Audited Findings](./05-security-and-validation.md)
 - [Local Setup & Cloudflare Deployment](./06-local-setup-and-deployment.md)
+- [Vib Apps Engine AI Guide & Playbook](./08-vib-apps-engine-ai-guide.md)

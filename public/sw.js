@@ -32,6 +32,7 @@ const STATIC_ASSETS = [
   "/components/sections/AppGrid.js",
   "/components/sections/AppDetailView.js",
   "/components/sections/CliGuideSection.js",
+  "/components/sections/SchemaGuideSection.js",
   "/app.js",
   "/favicon.ico",
   "/apple-touch-icon.png",

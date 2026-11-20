@@ -40,6 +40,10 @@ export function parseRoute(pathname = window.location.pathname) {
     return { view: "cli" };
   }
 
+  if (segments[0] === "schema" || segments[0] === "vib-apps-engine") {
+    return { view: "schema" };
+  }
+
   return { view: "not-found", path: pathname };
 }
 

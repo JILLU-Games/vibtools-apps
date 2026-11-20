@@ -22,14 +22,15 @@
 | `users/04-downloads-and-verification.md` | File | Active / `docs.vib.tools` | Two-column detail page, version selector, docs tabs, and SHA256 `Get-FileHash` verification (`order: 4`). |
 | `users/05-workflows.md` | File | Active / `docs.vib.tools` | Task workflows and complete keyboard shortcut reference (`order: 5`). |
 | `users/06-troubleshooting-and-faq.md` | File | Active / `docs.vib.tools` | Verified error states, offline behavior, clipboard fallback, and FAQ (`order: 6`). |
-| `dev/index.md` | File | Active / `developer.vibtools.io` | Developer portal root and verified zero-build stack summary (`order: 0`, `version: 1.0.0`). |
+| `dev/index.md` | File | Active / `developer.vibtools.io` | Developer portal root, Frozen Schema v1 stack summary, and 8-guide navigation map (`order: 0`, `version: 1.0.0`). |
 | `dev/01-architecture.md` | File | Active / `developer.vibtools.io` | System architecture, Mermaid diagrams, SPA lifecycle, 4-tier caching, and fallback flow (`order: 1`). |
 | `dev/02-codebase-structure.md` | File | Active / `developer.vibtools.io` | Complete file-by-file and symbol-level module inventory (`order: 2`). |
-| `dev/03-app-onboarding.md` | File | Active / `developer.vibtools.io` | `.vibtools/` layout, strict vs optional schema fields, installer contract, and `registry.json` (`order: 3`). |
-| `dev/04-api-and-edge-routing.md` | File | Active / `developer.vibtools.io` | `/api/apps` Mode A/B contracts, CORS, `get.vib.tools` routing, version normalization, and SPA fallback (`order: 4`). |
-| `dev/05-security-and-validation.md` | File | Active / `developer.vibtools.io` | Secret isolation, traversal/slug guards, DOMPurify, and verified audit findings (`order: 5`). |
+| `dev/03-app-onboarding.md` | File | Active / `developer.vibtools.io` | Frozen Schema v1 `.vibtools/apps/app.config.json`, per-version installers, and URL-only `registry.json` (`order: 3`). |
+| `dev/04-api-and-edge-routing.md` | File | Active / `developer.vibtools.io` | `/api/apps` Mode A/B contracts, domain isolation, `get.vib.tools` routing, version normalization, and public AI/Schema endpoints (`order: 4`). |
+| `dev/05-security-and-validation.md` | File | Active / `developer.vibtools.io` | Secret isolation, host allowlists, Frozen v1 strict invariants, DOMPurify, and resolved audit record (`order: 5`). |
 | `dev/06-local-setup-and-deployment.md` | File | Active / `developer.vibtools.io` | Node.js 22 `server.js` emulator, Wrangler, Cloudflare Pages, secrets, domains, and R2 (`order: 6`). |
-| `dev/07-testing-and-contributing.md` | File | Active / `developer.vibtools.io` | Native `node:test` suites (12 tests), syntax checks, UI guardrails, and doc sync rules (`order: 7`). |
+| `dev/07-testing-and-contributing.md` | File | Active / `developer.vibtools.io` | Native `node:test` suites (`npm test`), syntax checks, UI guardrails (`vib-apps-hub-v3`), and doc sync rules (`order: 7`). |
+| `dev/08-vib-apps-engine-ai-guide.md` | File | Active / `developer.vibtools.io` | Public AI-readable URLs, ready-to-paste AI agent prompt, hard schema invariants, and 12-point checklist (`order: 8`). |
 | `reference/index.md` | File | Active | Technical reference hub. |
 | `reference/configuration-reference.md` | File | Active | Complete configuration files, environment variables, scripts, and browser storage reference. |
 | `reference/design-tokens-and-components.md` | File | Active | CSS tokens (`tokens.css`), breakpoints (`globals.css`), and UI primitives API (`components/ui/`). |

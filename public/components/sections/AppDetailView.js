@@ -265,7 +265,14 @@ function renderDetail(container, app, docs) {
   // --- RIGHT COLUMN: Download & Install Panel ---
   const versionsObj = app.versions || {};
   const versionKeys = Object.keys(versionsObj);
-  let selectedVersion = app.latest || (versionKeys.length > 0 ? versionKeys[0] : "");
+  let selectedVersion =
+    app.latest && Object.hasOwn(versionsObj, app.latest)
+      ? app.latest
+      : versionKeys.find(
+          (k) =>
+            app.latest &&
+            k.toLowerCase().replace(/^v/, "") === String(app.latest).toLowerCase().replace(/^v/, "")
+        ) || (versionKeys.length > 0 ? versionKeys[0] : "");
   let isHashExpanded = false;
 
   const installCard = document.createElement("section");
@@ -566,11 +573,19 @@ function renderDetail(container, app, docs) {
       dateMeta.row.classList.add("ui-hidden");
     }
 
-    // Package format row
+    // Package format & active installer runtime cue (respects per-version installer override)
+    const activeInstallerType =
+      (verData.installer && typeof verData.installer === "object" && verData.installer.type) ||
+      (app.installer && typeof app.installer === "object" && app.installer.type) ||
+      "";
+    cliLabel.textContent =
+      activeInstallerType && activeInstallerType.toLowerCase() !== "powershell"
+        ? `${activeInstallerType} CLI`
+        : "PowerShell CLI";
     const installerCue =
-      app.installer?.type && app.installer.type.toLowerCase() === "powershell"
+      activeInstallerType && activeInstallerType.toLowerCase() === "powershell"
         ? "PowerShell"
-        : app.installer?.type || "";
+        : activeInstallerType || "";
     const packageParts = [fmt, installerCue].filter(Boolean);
     if (packageParts.length > 0) {
       formatMeta.dd.textContent = packageParts.join(" · ");
@@ -684,7 +699,7 @@ function renderDetail(container, app, docs) {
 
     app.screenshots.forEach((item, index) => {
       const src = typeof item === "string" ? item : item?.url;
-      if (!src) return;
+      if (!src || !/^https:\/\//i.test(src)) return;
       const fig = document.createElement("figure");
       fig.className = "app-detail__gallery-item";
       const img = document.createElement("img");
