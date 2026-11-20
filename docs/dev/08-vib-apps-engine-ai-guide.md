@@ -20,17 +20,50 @@ draft: false
 | `https://apps.vib.tools/vib-apps-engine/vibtools-app-config.md` | **Complete A–Z Setup Guide** — Step-by-step Levels 1–3, field reference, PowerShell guide, and troubleshooting. |
 | `https://apps.vib.tools/vib-apps-engine/ai-guide.md` | **AI Execution Playbook** — 6-phase autonomous workflow and ready-to-paste prompt. |
 
-## 2. Ready-to-Paste Prompt for Any AI Coding Assistant
+## 2. Ready-to-Paste Prompts for Any AI Coding Assistant
+
+### A. First-Time Setup Prompt (Create `.vibtools/apps/`)
 
 Paste this prompt into any AI coding agent inside your application's repository:
 
 ```text
-Read https://apps.vib.tools/vib-apps-engine/llms.txt and https://apps.vib.tools/schemas/vibtools-app.schema.json completely.
-Then inspect this repository and create a complete, strictly valid Vib Apps Engine v1 setup inside `.vibtools/apps/`:
-1. `.vibtools/apps/app.config.json` (strict schemaVersion: 1, zero unknown keys, lowercase slug, exact `latest` key match, calendar-valid `released_at` YYYY-MM-DD, trusted HTTPS binary URLs, and per-version `installer` overrides if any version needs a separate installer script).
-2. `.vibtools/apps/installer.ps1` (consuming injected `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` dynamically).
-3. `.vibtools/apps/features.md` and `.vibtools/apps/changelog.md` (clean Markdown, zero unsafe raw HTML).
-Verify every item in the 12-Point Self-Verification Checklist before finishing, and print the exact GitHub repository URL line to paste into `registry.json` in `vib-apps-hub`.
+MANDATORY PRE-FLIGHT (FAIL-CLOSED):
+Fetch and read BOTH Vib Apps Engine Frozen v1 specs first (use web fetch or run `curl -sS` in terminal):
+- Single-URL Master Bundle: https://apps.vib.tools/llms-full.txt
+- Frozen JSON Schema: https://apps.vib.tools/schemas/vibtools-app.schema.json
+If you cannot fetch these URLs, STOP immediately and ask me to paste them — NEVER guess or invent schema fields.
+
+Audit this repository and configure it for apps.vib.tools and get.vib.tools by:
+1. Inspecting our real codebase (README, project/build files, `.vibtools/logo.*`, release assets/tags) so zero fake metadata or invented features are written.
+2. Creating `.vibtools/apps/app.config.json` strictly matching `schemaVersion: 1` (`additionalProperties: false`):
+   - ONLY allowed root keys: `$schema`, `schemaVersion`, `slug`, `name`, `tagline`, `category`, `access`, `icon`, `latest`, `installer`, `docs`, `platforms`, `architectures`, `requirements`, `screenshots`, `links`, `versions`.
+   - ONLY allowed `versions.<ver>` keys: `url`, `installer`, `size`, `sha256`, `released_at`, `channel`, `deprecated`.
+   - STRICTLY FORBIDDEN keys (cause HTTP 422): `description`, `license`, `artifacts`, `platforms` inside `versions.<ver>`, `releaseDate`, `downloadUrl`. Use `"access": "Free" | "Paid"`, `"tagline"`, root `"platforms"`/`"architectures"`, and flat `"url"` directly on each version entry.
+   - Enforce lowercase `slug`, exact `latest` key match inside `versions`, calendar-valid `YYYY-MM-DD` `released_at`, trusted HTTPS binary URLs, and 64-char hex `sha256` (omit `sha256` if not computed yet — never write placeholders like "TBD").
+   - Verify with `curl -sSI` (when network is available) that every `https://` URL (`versions.<ver>.url`, remote `installer`, `icon`, `links.*`) returns HTTP 200/302/308 — never point `installer` or `links` to a 404 URL (use `".vibtools/apps/installer.ps1"` for repo scripts).
+3. Creating `.vibtools/apps/installer.ps1` (saved as UTF-8 without BOM) using the edge-injected `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` variables (add per-version `installer` override only if a specific version has a verified working separate script).
+4. Creating factual `.vibtools/apps/features.md` and `.vibtools/apps/changelog.md` matching the real app and every version key in `versions`.
+5. Running a programmatic key-whitelist & JSON validation check on `.vibtools/apps/app.config.json`, verifying all 12 items in the Self-Verification Checklist, and printing the exact GitHub repo URL to add to `registry.json`.
+```
+
+### B. Audit & Fix Prompt (Fix Existing `.vibtools/apps/`)
+
+```text
+MANDATORY PRE-FLIGHT (FAIL-CLOSED):
+Fetch and read BOTH Vib Apps Engine Frozen v1 specs first (use web fetch or run `curl -sS` in terminal):
+- Single-URL Master Bundle: https://apps.vib.tools/llms-full.txt
+- Frozen JSON Schema: https://apps.vib.tools/schemas/vibtools-app.schema.json
+If you cannot fetch these URLs, STOP immediately and ask me to paste them — NEVER guess or invent schema fields.
+
+Perform a strict forensic audit and fix of `.vibtools/apps/` in this repository:
+1. Validate `.vibtools/apps/app.config.json` strictly against Frozen v1 (`schemaVersion: 1`, `additionalProperties: false`):
+   - Reject and remove/migrate any unknown root keys (e.g. `description` -> `tagline`/`features.md`, `license` -> `access: "Free" | "Paid"`).
+   - Reject and flatten any invalid nested version structures (e.g. `versions.<ver>.artifacts[]` or `versions.<ver>.platforms` -> flat `url`, `size`, `sha256`, `released_at`, `installer`, `channel`, `deprecated` directly on `versions.<ver>`, with `platforms` and `architectures` at root).
+   - Verify lowercase `slug`, exact `latest` key match, calendar-valid `YYYY-MM-DD` `released_at`, valid 64-hex `sha256` (or omitted), valid HTTPS `icon` (use repo logo raw HTTPS URL or uploaded asset if available), and safe repo-relative `docs` paths.
+2. Live-probe every `https://` URL (`versions.<ver>.url`, root/per-version `installer`, `icon`, `links.*`) via `curl -sSI` when network is available; fix or remove any 404/broken URLs (never keep a 404 remote `installer` when `.vibtools/apps/installer.ps1` exists in the repo).
+3. Verify `.vibtools/apps/installer.ps1` (saved as UTF-8 without BOM) cleanly uses `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME`, handles optional leading `v` safely, and works with `get.vib.tools/<slug>[/<version>]`.
+4. Verify `.vibtools/apps/features.md` and `.vibtools/apps/changelog.md` match the real app and every version listed in `versions` with consistent SHA256/requirements.
+5. Run a programmatic JSON & Frozen v1 key-whitelist check, fix every HTTP 422/403/404 risk, and report a pass/fail summary against all 12 checklist items.
 ```
 
 ## 3. Hard Frozen Schema Invariants (`schemaVersion: 1`)

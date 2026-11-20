@@ -55,14 +55,52 @@ const SHAREABLE_RESOURCES = [
   }
 ];
 
-const AI_READY_PROMPT = [
-  "Read https://apps.vib.tools/llms-full.txt and https://apps.vib.tools/schemas/vibtools-app.schema.json completely.",
-  "Inspect this repository and create a strictly valid Vib Apps Engine v1 setup inside `.vibtools/apps/`:",
-  "1. `.vibtools/apps/app.config.json` (schemaVersion: 1, zero unknown keys, lowercase slug, exact `latest` key match, calendar-valid `released_at` YYYY-MM-DD, valid trusted HTTPS binary URLs, and per-version `installer` overrides only if needed).",
-  "2. `.vibtools/apps/installer.ps1` using injected `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` dynamically.",
-  "3. `.vibtools/apps/features.md` and `.vibtools/apps/changelog.md` with clean Markdown and zero unsafe raw HTML.",
-  "Verify all 12 items of the Self-Verification Checklist and output the exact GitHub repo URL to paste into `registry.json` in `vib-apps-hub`."
-].join("\n");
+const AI_PROMPTS = {
+  setup: {
+    label: "First-Time Setup",
+    toastLabel: "Copied AI setup prompt",
+    text: [
+      "MANDATORY PRE-FLIGHT (FAIL-CLOSED):",
+      "Fetch and read BOTH Vib Apps Engine Frozen v1 specs first (use web fetch or run `curl -sS` in terminal):",
+      "- Single-URL Master Bundle: https://apps.vib.tools/llms-full.txt",
+      "- Frozen JSON Schema: https://apps.vib.tools/schemas/vibtools-app.schema.json",
+      "If you cannot fetch these URLs, STOP immediately and ask me to paste them — NEVER guess or invent schema fields.",
+      "",
+      "Audit this repository and configure it for apps.vib.tools and get.vib.tools by:",
+      "1. Inspecting our real codebase (README, project/build files, `.vibtools/logo.*`, release assets/tags) so zero fake metadata or invented features are written.",
+      "2. Creating `.vibtools/apps/app.config.json` strictly matching `schemaVersion: 1` (`additionalProperties: false`):",
+      "   - ONLY allowed root keys: `$schema`, `schemaVersion`, `slug`, `name`, `tagline`, `category`, `access`, `icon`, `latest`, `installer`, `docs`, `platforms`, `architectures`, `requirements`, `screenshots`, `links`, `versions`.",
+      "   - ONLY allowed `versions.<ver>` keys: `url`, `installer`, `size`, `sha256`, `released_at`, `channel`, `deprecated`.",
+      "   - STRICTLY FORBIDDEN keys (cause HTTP 422): `description`, `license`, `artifacts`, `platforms` inside `versions.<ver>`, `releaseDate`, `downloadUrl`. Use `\"access\": \"Free\" | \"Paid\"`, `\"tagline\"`, root `\"platforms\"`/`\"architectures\"`, and flat `\"url\"` directly on each version entry.",
+      "   - Enforce lowercase `slug`, exact `latest` key match inside `versions`, calendar-valid `YYYY-MM-DD` `released_at`, trusted HTTPS binary URLs, and 64-char hex `sha256` (omit `sha256` if not computed yet — never write placeholders like \"TBD\").",
+      "   - Verify with `curl -sSI` (when network is available) that every `https://` URL (`versions.<ver>.url`, remote `installer`, `icon`, `links.*`) returns HTTP 200/302/308 — never point `installer` or `links` to a 404 URL (use `\".vibtools/apps/installer.ps1\"` for repo scripts).",
+      "3. Creating `.vibtools/apps/installer.ps1` (saved as UTF-8 without BOM) using the edge-injected `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME` variables (add per-version `installer` override only if a specific version has a verified working separate script).",
+      "4. Creating factual `.vibtools/apps/features.md` and `.vibtools/apps/changelog.md` matching the real app and every version key in `versions`.",
+      "5. Running a programmatic key-whitelist & JSON validation check on `.vibtools/apps/app.config.json`, verifying all 12 items in the Self-Verification Checklist, and printing the exact GitHub repo URL to add to `registry.json`."
+    ].join("\n")
+  },
+  audit: {
+    label: "Audit & Fix",
+    toastLabel: "Copied AI audit & fix prompt",
+    text: [
+      "MANDATORY PRE-FLIGHT (FAIL-CLOSED):",
+      "Fetch and read BOTH Vib Apps Engine Frozen v1 specs first (use web fetch or run `curl -sS` in terminal):",
+      "- Single-URL Master Bundle: https://apps.vib.tools/llms-full.txt",
+      "- Frozen JSON Schema: https://apps.vib.tools/schemas/vibtools-app.schema.json",
+      "If you cannot fetch these URLs, STOP immediately and ask me to paste them — NEVER guess or invent schema fields.",
+      "",
+      "Perform a strict forensic audit and fix of `.vibtools/apps/` in this repository:",
+      "1. Validate `.vibtools/apps/app.config.json` strictly against Frozen v1 (`schemaVersion: 1`, `additionalProperties: false`):",
+      "   - Reject and remove/migrate any unknown root keys (e.g. `description` -> `tagline`/`features.md`, `license` -> `access: \"Free\" | \"Paid\"`).",
+      "   - Reject and flatten any invalid nested version structures (e.g. `versions.<ver>.artifacts[]` or `versions.<ver>.platforms` -> flat `url`, `size`, `sha256`, `released_at`, `installer`, `channel`, `deprecated` directly on `versions.<ver>`, with `platforms` and `architectures` at root).",
+      "   - Verify lowercase `slug`, exact `latest` key match, calendar-valid `YYYY-MM-DD` `released_at`, valid 64-hex `sha256` (or omitted), valid HTTPS `icon` (use repo logo raw HTTPS URL or uploaded asset if available), and safe repo-relative `docs` paths.",
+      "2. Live-probe every `https://` URL (`versions.<ver>.url`, root/per-version `installer`, `icon`, `links.*`) via `curl -sSI` when network is available; fix or remove any 404/broken URLs (never keep a 404 remote `installer` when `.vibtools/apps/installer.ps1` exists in the repo).",
+      "3. Verify `.vibtools/apps/installer.ps1` (saved as UTF-8 without BOM) cleanly uses `$APP_SLUG`, `$APP_VERSION`, and `$APP_NAME`, handles optional leading `v` safely, and works with `get.vib.tools/<slug>[/<version>]`.",
+      "4. Verify `.vibtools/apps/features.md` and `.vibtools/apps/changelog.md` match the real app and every version listed in `versions` with consistent SHA256/requirements.",
+      "5. Run a programmatic JSON & Frozen v1 key-whitelist check, fix every HTTP 422/403/404 risk, and report a pass/fail summary against all 12 checklist items."
+    ].join("\n")
+  }
+};
 
 const DOC_TABS = [
   { id: "guide", label: "A–Z Setup Guide", path: "/vib-apps-engine/vibtools-app-config.md", format: "markdown" },
@@ -240,40 +278,74 @@ export function SchemaGuideSection() {
   urlCard.appendChild(urlGrid);
   container.appendChild(urlCard);
 
-  // 4. Ready-to-Paste AI Prompt Card
+  // 4. Ready-to-Paste AI Prompt Card (Setup + Audit/Fix)
   const promptCard = document.createElement("section");
   promptCard.className = "app-schema__panel";
+
+  let activePromptKey = "setup";
 
   const promptHead = document.createElement("div");
   promptHead.className = "app-cli-guide__card-head";
 
   const promptTitle = document.createElement("h2");
   promptTitle.className = "app-cli-guide__title";
-  promptTitle.textContent = "Ready-to-Paste AI Agent Prompt";
+  promptTitle.textContent = "Ready-to-Paste AI Agent Prompts";
   promptHead.appendChild(promptTitle);
 
-  promptHead.appendChild(
+  const promptActions = document.createElement("div");
+  promptActions.className = "app-schema__btn-group";
+
+  const promptSwitchGroup = document.createElement("div");
+  promptSwitchGroup.className = "app-segmented";
+  promptSwitchGroup.setAttribute("role", "group");
+  promptSwitchGroup.setAttribute("aria-label", "Select AI prompt mode");
+
+  const promptPre = document.createElement("pre");
+  promptPre.className = "app-schema__prompt";
+  promptPre.textContent = AI_PROMPTS[activePromptKey].text;
+
+  const promptModeButtons = new Map();
+  Object.entries(AI_PROMPTS).forEach(([key, entry]) => {
+    const modeBtn = document.createElement("button");
+    modeBtn.type = "button";
+    modeBtn.className = `app-segmented__btn${key === activePromptKey ? " is-active" : ""}`;
+    modeBtn.textContent = entry.label;
+    modeBtn.setAttribute("aria-pressed", key === activePromptKey ? "true" : "false");
+    modeBtn.addEventListener("click", () => {
+      activePromptKey = key;
+      promptPre.textContent = AI_PROMPTS[key].text;
+      promptModeButtons.forEach((btn, k) => {
+        const isCurrent = k === key;
+        btn.classList.toggle("is-active", isCurrent);
+        btn.setAttribute("aria-pressed", isCurrent ? "true" : "false");
+      });
+    });
+    promptModeButtons.set(key, modeBtn);
+    promptSwitchGroup.appendChild(modeBtn);
+  });
+
+  promptActions.appendChild(promptSwitchGroup);
+
+  promptActions.appendChild(
     Button({
       label: "Copy AI Prompt",
       icon: "copy",
       variant: "primary",
       size: "sm",
-      ariaLabel: "Copy ready-to-paste AI prompt",
+      ariaLabel: "Copy active ready-to-paste AI prompt",
       onClick: async () => {
-        const ok = await copyToClipboard(AI_READY_PROMPT);
+        const activeEntry = AI_PROMPTS[activePromptKey];
+        const ok = await copyToClipboard(activeEntry.text);
         if (ok) {
-          toast.success("Copied AI onboarding prompt");
+          toast.success(activeEntry.toastLabel);
         } else {
           toast.error("Failed to copy prompt");
         }
       }
     })
   );
+  promptHead.appendChild(promptActions);
   promptCard.appendChild(promptHead);
-
-  const promptPre = document.createElement("pre");
-  promptPre.className = "app-schema__prompt";
-  promptPre.textContent = AI_READY_PROMPT;
   promptCard.appendChild(promptPre);
   container.appendChild(promptCard);
 
