@@ -387,12 +387,13 @@ export async function fetchRepoFile(repo, branch, filePath, env, ctx, { ttl = 30
     }
   }
 
-  // 2. Fetch from GitHub API (segment-encode path while preserving slashes)
+  // 2. Fetch from GitHub Contents API (with automatic raw.githubusercontent.com fallback on 403/429/5xx/network errors)
   const encodedCleanPath = cleanPath
     .split("/")
     .map((seg) => encodeURIComponent(seg))
     .join("/");
   const apiUrl = `https://api.github.com/repos/${repo}/contents/${encodedCleanPath}?ref=${encodeURIComponent(targetBranch)}`;
+  const rawUrl = `https://raw.githubusercontent.com/${repo}/${encodeURIComponent(targetBranch)}/${encodedCleanPath}`;
   const headers = {
     "Accept": "application/vnd.github.raw+json",
     "User-Agent": "vib-apps-hub"
@@ -402,14 +403,36 @@ export async function fetchRepoFile(repo, branch, filePath, env, ctx, { ttl = 30
     headers["Authorization"] = `Bearer ${env.GITHUB_TOKEN.trim()}`;
   }
 
-  let res;
+  let res = null;
+  let fetchError = null;
   try {
     res = await fetch(apiUrl, { headers });
   } catch (err) {
+    fetchError = err;
+  }
+
+  // Fallback to raw.githubusercontent.com for public repos when GitHub REST API is rate-limited (403/429) or unreachable
+  const shouldFallbackToRaw =
+    !res || res.status === 403 || res.status === 429 || res.status >= 500;
+  if (shouldFallbackToRaw) {
+    try {
+      const rawRes = await fetch(rawUrl, {
+        headers: { "User-Agent": "vib-apps-hub" }
+      });
+      if (rawRes.ok) {
+        res = rawRes;
+        fetchError = null;
+      }
+    } catch (_) {
+      // Preserve primary GitHub API error when fallback also fails
+    }
+  }
+
+  if (!res) {
     return {
       ok: false,
       status: 502,
-      error: `Network error requesting ${cleanPath}: ${err?.message || "Unknown error"}`
+      error: `Network error requesting ${cleanPath}: ${fetchError?.message || "Unknown error"}`
     };
   }
 

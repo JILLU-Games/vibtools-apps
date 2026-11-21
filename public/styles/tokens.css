@@ -5,21 +5,21 @@
 
 :root {
   /* =========================================================================
-     Typography (Clean, Crisp & Compact — Inter + JetBrains Mono)
+     Typography (Crisp Compact Whole-Pixel Scale — Inter + JetBrains Mono)
      ========================================================================= */
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Font Sizes (Compact & Balanced) */
+  /* Font Sizes (Strict whole-pixel compact scale for sharp Windows/macOS/Mobile rendering) */
   --text-xs: 11px;
   --text-sm: 12px;
   --text-base: 13px;
   --text-md: 14px;
-  --text-lg: 16px;
-  --text-xl: 19px;
-  --text-2xl: 21px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
 
-  /* Font Weights (Smooth, soft, balanced — never heavy 700/800) */
+  /* Font Weights (Balanced, clean — never heavy 700/800) */
   --fw-normal: 400;
   --fw-medium: 500;
   --fw-semibold: 600;
@@ -45,8 +45,8 @@
   /* =========================================================================
      Component & Layout Geometry
      ========================================================================= */
-  --header-h: 52px;
-  --sidebar-w: 224px;
+  --header-h: 46px;
+  --sidebar-w: 196px;
   --mobile-nav-h: 52px;
   --scrollbar-size: 1px;
   --z-header: 40;
@@ -55,16 +55,16 @@
   --z-toast: 150;
 }
 
-/* Compact Laptop / Split-Screen (e.g. 901px–1120px) */
+/* Compact Laptop / Split-Screen (901px–1120px) */
 @media (max-width: 1120px) {
   :root {
-    --header-h: 48px;
-    --sidebar-w: 188px;
+    --header-h: 46px;
+    --sidebar-w: 184px;
 
-    --text-xs: 10.5px;
-    --text-sm: 11.5px;
-    --text-base: 12.5px;
-    --text-md: 13px;
+    --text-xs: 11px;
+    --text-sm: 12px;
+    --text-base: 13px;
+    --text-md: 14px;
     --text-lg: 15px;
     --text-xl: 17px;
     --text-2xl: 19px;
@@ -81,13 +81,13 @@
   :root {
     --sidebar-w: 168px;
 
-    --text-xs: 10.5px;
-    --text-sm: 11.5px;
-    --text-base: 12px;
-    --text-md: 13px;
-    --text-lg: 14.5px;
-    --text-xl: 16px;
-    --text-2xl: 18px;
+    --text-xs: 11px;
+    --text-sm: 12px;
+    --text-base: 13px;
+    --text-md: 14px;
+    --text-lg: 15px;
+    --text-xl: 17px;
+    --text-2xl: 19px;
   }
 }
 
@@ -97,13 +97,13 @@
     --header-h: 46px;
     --mobile-nav-h: 52px;
 
-    --text-xs: 10.5px;
-    --text-sm: 11.5px;
-    --text-base: 12px;
-    --text-md: 13px;
-    --text-lg: 14px;
-    --text-xl: 16px;
-    --text-2xl: 18px;
+    --text-xs: 11px;
+    --text-sm: 12px;
+    --text-base: 13px;
+    --text-md: 14px;
+    --text-lg: 15px;
+    --text-xl: 17px;
+    --text-2xl: 19px;
 
     --sp-3: 10px;
     --sp-4: 12px;
@@ -114,52 +114,52 @@
 }
 
 /* =========================================================================
-   Dark Theme (Default)
+   Dark Theme (Default — Clean Neutral Carbon, Hairline Borders, Crisp Ink)
    ========================================================================= */
 :root,
 [data-theme="dark"] {
-  --bg-page: #0d1117;
-  --bg-surface: #161b22;
-  --bg-elevated: #1c222b;
-  --bg-hover: #21262d;
-  --bg-subtle: #1b2028;
+  --bg-page: #090b0f;
+  --bg-surface: #11141a;
+  --bg-elevated: #161a22;
+  --bg-hover: #1d222c;
+  --bg-subtle: #171b23;
 
-  --border-color: #30363d;
-  --border-strong: #484f58;
-  --border-muted: #21262d;
+  --border-color: #232833;
+  --border-strong: #343b49;
+  --border-muted: #1b2029;
 
-  --text-primary: #cdd6e0;
-  --text-secondary: #8f9ba8;
-  --text-muted: #6c7785;
+  --text-primary: #f1f4f9;
+  --text-secondary: #98a2b3;
+  --text-muted: #667085;
 
-  --accent: #2663c7;
-  --accent-hover: #3272d8;
-  --accent-readable: #6ca0dc;
-  --accent-soft: rgba(108, 160, 220, 0.11);
-  --accent-border: rgba(108, 160, 220, 0.28);
-  --accent-text: #e8eef7;
+  --accent: #2563eb;
+  --accent-hover: #3b82f6;
+  --accent-readable: #60a5fa;
+  --accent-soft: rgba(59, 130, 246, 0.12);
+  --accent-border: rgba(59, 130, 246, 0.30);
+  --accent-text: #ffffff;
 
-  --status-success: #23743b;
-  --status-success-text: #5ca874;
-  --status-success-soft: rgba(92, 168, 116, 0.12);
-  --status-success-border: rgba(92, 168, 116, 0.28);
+  --status-success: #16a34a;
+  --status-success-text: #4ade80;
+  --status-success-soft: rgba(34, 197, 94, 0.11);
+  --status-success-border: rgba(34, 197, 94, 0.28);
 
-  --status-error: #d96460;
-  --status-error-soft: rgba(217, 100, 96, 0.14);
-  --status-error-border: rgba(217, 100, 96, 0.34);
-  --status-warn: #c49645;
-  --status-warn-soft: rgba(196, 150, 69, 0.14);
+  --status-error: #ef4444;
+  --status-error-soft: rgba(239, 68, 68, 0.12);
+  --status-error-border: rgba(239, 68, 68, 0.30);
+  --status-warn: #f59e0b;
+  --status-warn-soft: rgba(245, 158, 11, 0.12);
 
-  --badge-free-bg: #23743b;
-  --badge-paid-bg: #7553b8;
-  --badge-paid-text: #a88fd8;
-  --badge-paid-soft: rgba(168, 143, 216, 0.13);
-  --badge-paid-border: rgba(168, 143, 216, 0.3);
-  --badge-forge-bg: #b8732a;
-  --badge-forge-text: #d9a05b;
-  --badge-forge-soft: rgba(217, 160, 91, 0.13);
-  --badge-forge-border: rgba(217, 160, 91, 0.32);
-  --modal-backdrop: rgba(0, 0, 0, 0.72);
+  --badge-free-bg: #16a34a;
+  --badge-paid-bg: #7c3aed;
+  --badge-paid-text: #c4b5fd;
+  --badge-paid-soft: rgba(139, 92, 246, 0.13);
+  --badge-paid-border: rgba(139, 92, 246, 0.30);
+  --badge-forge-bg: #d97706;
+  --badge-forge-text: #fbbf24;
+  --badge-forge-soft: rgba(245, 158, 11, 0.12);
+  --badge-forge-border: rgba(245, 158, 11, 0.30);
+  --modal-backdrop: rgba(4, 6, 10, 0.76);
 
   /* Scrollbar Tokens */
   --scrollbar-track: transparent;
@@ -173,51 +173,51 @@
 }
 
 /* =========================================================================
-   Light Theme
+   Light Theme (Clean Studio White — High Contrast, Whisper-Soft Borders)
    ========================================================================= */
 [data-theme="light"] {
-  --bg-page: #f6f8fa;
+  --bg-page: #f8f9fb;
   --bg-surface: #ffffff;
   --bg-elevated: #ffffff;
-  --bg-hover: #f0f3f6;
-  --bg-subtle: #eaeef2;
+  --bg-hover: #eef1f6;
+  --bg-subtle: #f2f4f8;
 
-  --border-color: #d0d7de;
-  --border-strong: #afb8c1;
-  --border-muted: #e1e4e8;
+  --border-color: #e2e6ee;
+  --border-strong: #cbd2df;
+  --border-muted: #edf0f5;
 
-  --text-primary: #1f2328;
-  --text-secondary: #59636e;
-  --text-muted: #656d76;
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
 
-  --accent: #0969da;
-  --accent-hover: #0854b0;
-  --accent-readable: #0969da;
-  --accent-soft: rgba(9, 105, 218, 0.1);
-  --accent-border: rgba(9, 105, 218, 0.32);
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-readable: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --accent-border: rgba(37, 99, 235, 0.28);
   --accent-text: #ffffff;
 
-  --status-success: #1a7f37;
-  --status-success-text: #1a7f37;
-  --status-success-soft: rgba(26, 127, 55, 0.1);
-  --status-success-border: rgba(26, 127, 55, 0.32);
+  --status-success: #15803d;
+  --status-success-text: #15803d;
+  --status-success-soft: rgba(22, 163, 74, 0.09);
+  --status-success-border: rgba(22, 163, 74, 0.28);
 
-  --status-error: #cf222e;
-  --status-error-soft: rgba(207, 34, 46, 0.1);
-  --status-error-border: rgba(207, 34, 46, 0.32);
-  --status-warn: #9a6700;
-  --status-warn-soft: rgba(154, 103, 0, 0.12);
+  --status-error: #dc2626;
+  --status-error-soft: rgba(220, 38, 38, 0.09);
+  --status-error-border: rgba(220, 38, 38, 0.28);
+  --status-warn: #b45309;
+  --status-warn-soft: rgba(217, 119, 6, 0.10);
 
-  --badge-free-bg: #1a7f37;
-  --badge-paid-bg: #8250df;
-  --badge-paid-text: #6639ba;
-  --badge-paid-soft: rgba(130, 80, 223, 0.1);
-  --badge-paid-border: rgba(130, 80, 223, 0.34);
-  --badge-forge-bg: #b35900;
-  --badge-forge-text: #9a4d00;
-  --badge-forge-soft: rgba(179, 89, 0, 0.1);
-  --badge-forge-border: rgba(179, 89, 0, 0.32);
-  --modal-backdrop: rgba(31, 35, 40, 0.55);
+  --badge-free-bg: #15803d;
+  --badge-paid-bg: #7c3aed;
+  --badge-paid-text: #6d28d9;
+  --badge-paid-soft: rgba(124, 58, 237, 0.09);
+  --badge-paid-border: rgba(124, 58, 237, 0.26);
+  --badge-forge-bg: #b45309;
+  --badge-forge-text: #b45309;
+  --badge-forge-soft: rgba(217, 119, 6, 0.10);
+  --badge-forge-border: rgba(217, 119, 6, 0.28);
+  --modal-backdrop: rgba(17, 24, 39, 0.50);
 
   /* Scrollbar Tokens */
   --scrollbar-track: transparent;

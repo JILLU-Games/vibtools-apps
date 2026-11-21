@@ -2,7 +2,7 @@
  * Service Worker for apps.vib.tools (PWA & Offline Shell).
  */
 
-const CACHE_NAME = "vib-apps-hub-v7";
+const CACHE_NAME = "vib-apps-hub-v9";
 
 const STATIC_ASSETS = [
   "/",

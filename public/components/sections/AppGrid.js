@@ -184,13 +184,6 @@ export function AppGrid({
   heading.className = "app-catalog-header__title";
   heading.textContent = displayCategory || "All Applications";
   headingGroup.appendChild(heading);
-
-  const subtitle = document.createElement("p");
-  subtitle.className = "app-catalog-header__subtitle";
-  subtitle.textContent = displayCategory
-    ? `Browse ${displayCategory} software distributed through Vib Apps and get.vib.tools.`
-    : "Desktop applications, developer utilities, and edge PowerShell installers from Vib Tools.";
-  headingGroup.appendChild(subtitle);
   headerBar.appendChild(headingGroup);
 
   if (!isLoading && !errorMessage) {
@@ -272,45 +265,6 @@ export function AppGrid({
   });
 
   leftControls.appendChild(accessGroup);
-
-  // Inline Category Select (rendered dynamically on desktop/tablet > 768px; mobile uses horizontal category chips)
-  if (categories.length > 0) {
-    const catSelectWrap = document.createElement("div");
-    catSelectWrap.className = "app-select-wrap app-filter-bar__select app-filter-bar__select--category";
-    catSelectWrap.appendChild(Icon("layers", 13));
-
-    const catSelect = document.createElement("select");
-    catSelect.className = "app-toolbar-select";
-    catSelect.setAttribute("aria-label", "Filter by category");
-
-    const allOpt = document.createElement("option");
-    allOpt.value = "";
-    allOpt.textContent = `All Categories (${total})`;
-    if (!activeCategory) allOpt.selected = true;
-    catSelect.appendChild(allOpt);
-
-    categories.forEach((cat) => {
-      const opt = document.createElement("option");
-      opt.value = cat.toLowerCase();
-      opt.textContent = `${cat} (${counts[cat] || 0})`;
-      if (activeCategory.toLowerCase() === cat.toLowerCase()) opt.selected = true;
-      catSelect.appendChild(opt);
-    });
-
-    catSelect.addEventListener("change", (e) => {
-      const val = e.target.value;
-      if (!val) {
-        navigate("/");
-      } else {
-        navigate(`/category/${encodeURIComponent(val)}`);
-      }
-    });
-
-    catSelectWrap.appendChild(catSelect);
-    catSelectWrap.appendChild(Icon("chevron-down", 13));
-    leftControls.appendChild(catSelectWrap);
-  }
-
   controlsBar.appendChild(leftControls);
 
   // Right Controls: Sort Dropdown + Reset Action
@@ -324,6 +278,8 @@ export function AppGrid({
       variant: "ghost",
       size: "sm",
       title: "Reset search, filters, and sort",
+      ariaLabel: "Reset search, filters, and sort",
+      className: "app-filter-bar__reset-btn",
       onClick: onResetFilters
     });
     rightControls.appendChild(resetBtn);
@@ -365,76 +321,7 @@ export function AppGrid({
   controlsBar.appendChild(rightControls);
   container.appendChild(controlsBar);
 
-  // 4. Pinned Quick CLI Installer Banner (home view when unfiltered and loaded without error)
-  if (!isLoading && !errorMessage && route.view === "home" && !hasActiveFilters) {
-    const banner = document.createElement("section");
-    banner.className = "app-cli-banner";
-    banner.setAttribute("aria-label", "CLI Installer");
-
-    const info = document.createElement("div");
-    info.className = "app-cli-banner__info";
-
-    const metaStack = document.createElement("div");
-    metaStack.className = "app-cli-banner__meta";
-
-    const labelRow = document.createElement("div");
-    labelRow.className = "app-cli-banner__label";
-    labelRow.appendChild(Icon("terminal", 15));
-    const labelText = document.createElement("span");
-    labelText.textContent = "CLI Installer";
-    labelRow.appendChild(labelText);
-    metaStack.appendChild(labelRow);
-
-    const hintEl = document.createElement("span");
-    hintEl.className = "app-cli-banner__hint";
-    hintEl.textContent = "Replace <slug> with an app slug";
-    metaStack.appendChild(hintEl);
-
-    info.appendChild(metaStack);
-
-    const cmdCode = document.createElement("code");
-    cmdCode.className = "app-cli-banner__cmd";
-    cmdCode.textContent = 'irm "https://get.vib.tools/<slug>" | iex';
-    info.appendChild(cmdCode);
-
-    banner.appendChild(info);
-
-    const bannerActions = document.createElement("div");
-    bannerActions.className = "app-cli-banner__actions";
-
-    const copyBannerBtn = Button({
-      label: "Copy",
-      icon: "copy",
-      size: "sm",
-      variant: "secondary",
-      ariaLabel: "Copy PowerShell installer template",
-      onClick: async () => {
-        const copied = await copyToClipboard('irm "https://get.vib.tools/<slug>" | iex');
-        if (copied) {
-          flashCopiedState(copyBannerBtn, "Copy", "copy");
-          toast.success("Installer command template copied");
-        } else {
-          toast.error("Failed to copy command to clipboard");
-        }
-      }
-    });
-
-    const guideBtn = Button({
-      label: "CLI Guide",
-      icon: "chevron-right",
-      size: "sm",
-      variant: "ghost",
-      onClick: () => navigate("/cli")
-    });
-
-    bannerActions.appendChild(copyBannerBtn);
-    bannerActions.appendChild(guideBtn);
-    banner.appendChild(bannerActions);
-
-    container.appendChild(banner);
-  }
-
-  // 5. Application Cards Grid / Distinct Loading, Error & Empty States
+  // 4. Application Cards Grid / Distinct Loading, Error & Empty States
   const grid = document.createElement("div");
   grid.className = "app-grid";
 

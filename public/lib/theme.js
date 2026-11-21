@@ -28,7 +28,7 @@ export function setTheme(theme) {
   const targetTheme = theme === "light" ? "light" : "dark";
   if (typeof document !== "undefined") {
     document.documentElement.setAttribute("data-theme", targetTheme);
-    const themeColor = targetTheme === "light" ? "#ffffff" : "#0d1117";
+    const themeColor = targetTheme === "light" ? "#ffffff" : "#090b0f";
     let metaTheme = document.querySelector('meta[name="theme-color"]');
     if (!metaTheme) {
       metaTheme = document.createElement("meta");

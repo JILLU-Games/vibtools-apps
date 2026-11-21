@@ -2,15 +2,15 @@
 
 > **Active Project:** `vib-apps-hub`  
 > **Target Domains:** `apps.vib.tools` (App Catalog) & `get.vib.tools` (Edge CLI & Direct Download Router)  
-> **Last Updated:** 2026-11-20 (Added `Forge` access tier across schema/validator/UI/docs + optional `dependencies[]` conditional **Companion Tools** download card on `/app/<slug>`)
+> **Last Updated:** 2026-11-21 (Synced & verified vibdocs/CalGrid v1.0.6 + added automatic raw.githubusercontent.com fallback in fetchRepoFile on GitHub 403/429 rate limits + SW v9 cache refresh)
 
 ---
 
 ## 1. Current Status
 
-- **Project Status:** **Production-Ready & Verified** — `https://github.com/vibdocs/CalGrid` live in `registry.json` & `functions/_lib/registry.js`; `?download=1` selected-version installer script download, `Forge` 3rd access tier (`Free` | `Paid` | `Forge`), and optional `dependencies[]` **Companion Tools** card implemented and verified.
+- **Project Status:** **Production-Ready & Verified** — `https://github.com/vibdocs/CalGrid` live-synced & verified at **`v1.0.6`** (4 releases: `1.0.6`, `1.0.4`, `1.0.3`, `1.0.2`; R2 master + per-version installers; `features.md` & `changelog.md` v1.0.6); automatic `raw.githubusercontent.com` rate-limit fallback hardened for Cloudflare Pages; `?download=1`, `Forge` tier, optional `dependencies[]` Companion Tools card, sticky left sidebar, and compact Desktop/Mobile UI verified.
 - **Git Repository:** `https://github.com/JILLU-Games/vibtools-apps.git` (Ready to commit & push to `main` for Cloudflare Pages deployment)
-- **Active / Next Phase:** **Production Push & Verification** — Push updated `vib-apps-hub` (`Forge` tier, `dependencies[]` Companion Tools card, updated Frozen v1 schema & AI prompts) to Cloudflare Pages.
+- **Active / Next Phase:** **Production Push & Verification** — Push updated `vib-apps-hub` (GitHub raw fallback fix for `apps.vib.tools` / `get.vib.tools`, sticky desktop sidebar, compact UI, `Forge` tier, `dependencies[]`) to Cloudflare Pages.
 - **Completed BugFix & Refinement Phases:**
   - Cycle 1 Phases 1–4 (Edge Routing/CORS, Frontend UI Parity, Caching/PWA)
   - Node.js 22 Edge Emulator & Dev Server (`server.js` & `package.json` on Port 3000)

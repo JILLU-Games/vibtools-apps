@@ -22,6 +22,10 @@ export function Sidebar({
   sidebar.className = "app-sidebar";
   sidebar.setAttribute("aria-label", "Marketplace Navigation");
 
+  const sidebarInner = document.createElement("div");
+  sidebarInner.className = "app-sidebar__inner";
+  sidebar.appendChild(sidebarInner);
+
   // 1. Discover section
   const discoverSection = document.createElement("nav");
   discoverSection.className = "app-sidebar__section";
@@ -72,7 +76,7 @@ export function Sidebar({
   });
   discoverSection.appendChild(cliLink);
 
-  sidebar.appendChild(discoverSection);
+  sidebarInner.appendChild(discoverSection);
 
   // 2. Categories section
   const catSection = document.createElement("nav");
@@ -88,7 +92,7 @@ export function Sidebar({
   catListContainer.className = "app-sidebar__list";
   catSection.appendChild(catListContainer);
 
-  sidebar.appendChild(catSection);
+  sidebarInner.appendChild(catSection);
 
   // 3. Resources section
   const resourcesSection = document.createElement("nav");
@@ -122,7 +126,7 @@ export function Sidebar({
     resourcesSection.appendChild(extLink);
   });
 
-  sidebar.appendChild(resourcesSection);
+  sidebarInner.appendChild(resourcesSection);
 
   function renderCategories(list, counts = {}) {
     catListContainer.innerHTML = "";

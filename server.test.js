@@ -10,6 +10,7 @@ import {
   normalizeRegistryEntry,
   getRegistry,
   resolveAppBySlug,
+  fetchAppConfig,
   fetchAppInstaller,
   fetchAppDoc,
   isTrustedInstallerUrl
@@ -436,11 +437,11 @@ test("BUG-13: Non-runtime assets removed from public/ and Modal.js primitive ret
   assert.equal(fs.existsSync(path.join(process.cwd(), "public/components/ui/Modal.js")), true);
 });
 
-test("BUG-17: Service worker uses vib-apps-hub-v7, skips cross-origin fonts/CDNs, precaches all existing manifest icons, and guards non-GET/non-HTTP fetches", () => {
+test("BUG-17: Service worker uses vib-apps-hub-v9, skips cross-origin fonts/CDNs, precaches all existing manifest icons, and guards non-GET/non-HTTP fetches", () => {
   const swSource = fs.readFileSync(path.join(process.cwd(), "public/sw.js"), "utf8");
   const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "public/manifest.json"), "utf8"));
 
-  assert.ok(swSource.includes('const CACHE_NAME = "vib-apps-hub-v7"'));
+  assert.ok(swSource.includes('const CACHE_NAME = "vib-apps-hub-v9"'));
   assert.ok(swSource.includes('if (event.request.method !== "GET") return;'));
   assert.ok(swSource.includes('if (!url.protocol.startsWith("http")) return;'));
   assert.ok(swSource.includes('if (url.origin !== self.location.origin) return;'));
@@ -1056,7 +1057,7 @@ test("Cycle 3 SEO-01 & SEO-02: Edge injects per-route title, canonical, OG/Twitt
       assert.ok(html.includes(`<title>${c.title}</title>`), `${c.path} title mismatch`);
       assert.ok(html.includes(`<link rel="canonical" href="${c.canonical}">`), `${c.path} canonical mismatch`);
       assert.ok(html.includes('<meta name="robots" content="index, follow">'), `${c.path} robots mismatch`);
-      assert.ok(html.includes('<meta name="theme-color" content="#0d1117">'), `${c.path} theme-color missing`);
+      assert.ok(html.includes('<meta name="theme-color" content="#090b0f">'), `${c.path} theme-color missing`);
 
       const ldMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
       assert.ok(ldMatch, `${c.path} JSON-LD missing`);
@@ -1453,6 +1454,62 @@ test("Frozen v1 validator supports Forge access tier and strict optional depende
     }).ok,
     false
   );
+});
+
+test("fetchRepoFile falls back to raw.githubusercontent.com when api.github.com returns 403 rate limit", async () => {
+  const originalFetch = globalThis.fetch;
+  const calGridV106 = {
+    $schema: "https://apps.vib.tools/schemas/vibtools-app.schema.json",
+    schemaVersion: 1,
+    slug: "calgrid",
+    name: "CalGrid",
+    tagline: "Create and personalize Google Calendar invitations in multiple Windows workspaces.",
+    category: "Productivity",
+    access: "Paid",
+    icon: "https://raw.githubusercontent.com/vibdocs/CalGrid/main/.vibtools/logo.png",
+    latest: "1.0.6",
+    installer: { type: "powershell", script: "https://dl.vib.tools/CalGrid/installer.ps1" },
+    docs: { features: ".vibtools/apps/features.md", changelog: ".vibtools/apps/changelog.md" },
+    platforms: ["Windows 10/11"],
+    architectures: ["x64"],
+    versions: {
+      "1.0.6": {
+        url: "https://dl.vib.tools/CalGrid/v1.0.6/CalGrid-v1.0.6-win-x64.zip",
+        installer: "https://dl.vib.tools/CalGrid/v1.0.6/installer.ps1",
+        size: "183 MiB",
+        sha256: "4e670a387db320f470428413d72f24db7b1820bb88dd493d03c3d4891509a84d",
+        released_at: "2026-11-21",
+        channel: "stable"
+      }
+    }
+  };
+
+  let hitApi = false;
+  let hitRaw = false;
+  const testRepo = "vibdocs/CalGrid-rate-limit-test";
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.startsWith(`https://api.github.com/repos/${testRepo}/contents/.vibtools/apps/app.config.json`)) {
+      hitApi = true;
+      return new Response("API rate limit exceeded", { status: 403 });
+    }
+    if (u === `https://raw.githubusercontent.com/${testRepo}/main/.vibtools/apps/app.config.json`) {
+      hitRaw = true;
+      return new Response(JSON.stringify(calGridV106), { status: 200 });
+    }
+    return new Response("Not Found", { status: 404 });
+  };
+
+  try {
+    const res = await fetchAppConfig({ repo: testRepo, branch: "main", featured: false }, {}, {});
+    assert.equal(hitApi, true);
+    assert.equal(hitRaw, true);
+    assert.equal(res.ok, true);
+    assert.equal(res.config.latest, "1.0.6");
+    assert.equal(res.config.versions["1.0.6"].size, "183 MiB");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 

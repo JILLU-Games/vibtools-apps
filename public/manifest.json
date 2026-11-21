@@ -4,8 +4,8 @@
   "description": "Central App Store, PowerShell Installers, and Direct Downloads for Vib Tools applications.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0d1117",
-  "theme_color": "#0d1117",
+  "background_color": "#090b0f",
+  "theme_color": "#090b0f",
   "icons": [
     {
       "src": "/vib.tools.Branding/favicon.svg",
